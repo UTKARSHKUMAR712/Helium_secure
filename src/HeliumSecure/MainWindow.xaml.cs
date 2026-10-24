@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.IO;
 using System.Security.Cryptography;
 using System.Windows;
@@ -9,6 +10,7 @@ using HeliumSecure.Core.Models;
 using HeliumSecure.Core.Process;
 using HeliumSecure.Core.Profiles;
 using HeliumSecure.Core.Storage;
+using HeliumSecure.Core.Update;
 using HeliumSecure.Helpers;
 using HeliumSecure.Views;
 
@@ -105,6 +107,12 @@ public partial class MainWindow : Window
     private ProfileDisplayItem? _selectedItem;
     private List<ProfileDisplayItem> _allProfiles = new();
 
+    // Update Center state
+    private readonly UpdateService _updateService = new();
+    private UpdateCheckResult? _latestLauncherResult;
+    private UpdateCheckResult? _latestBrowserResult;
+    private string? _downloadedInstallerPath;
+
     private static readonly Geometry EyeOpenGeometry = Geometry.Parse("M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z");
     private static readonly Geometry EyeClosedGeometry = Geometry.Parse("M12 7c2.76 0 5 2.24 5 5 0 .65-.13 1.26-.36 1.83l2.92 2.92c1.51-1.26 2.7-2.89 3.44-4.75-1.73-4.39-6-7.5-11-7.5-1.4 0-2.74.25-3.98.7l2.16 2.16C10.74 7.13 11.35 7 12 7zM2 4.27l2.28 2.28.46.46C3.08 8.3 1.78 10.02 1 12c1.73 4.39 6 7.5 11 7.5 1.55 0 3.03-.3 4.38-.84l.42.42L19.73 22 21 20.73 3.27 3 2 4.27zM7.53 9.8l1.55 1.55c-.05.21-.08.43-.08.65 0 1.66 1.34 3 3 3 .22 0 .44-.03.65-.08l1.55 1.55c-.67.33-1.41.53-2.2.53-2.76 0-5-2.24-5-5 0-.79.2-1.53.53-2.2zm4.31-.78l3.15 3.15.02-.16c0-1.66-1.34-3-3-3l-.17.01z");
 
@@ -131,6 +139,9 @@ public partial class MainWindow : Window
         {
             Dispatcher.InvokeAsync(PromptCreateFirstProfile);
         }
+
+        // Initialise Update Center (async fire-and-forget)
+        Loaded += (_, _) => InitializeUpdateCenterPage();
     }
 
     private void DetectHeliumExecutable()
@@ -239,6 +250,7 @@ public partial class MainWindow : Window
         VaultsPage.Visibility = Visibility.Collapsed;
         SecurityPage.Visibility = Visibility.Collapsed;
         SettingsPage.Visibility = Visibility.Collapsed;
+        if (UpdateCenterPage != null) UpdateCenterPage.Visibility = Visibility.Collapsed;
 
         if (NavDashboardButton.IsChecked == true)
         {
@@ -266,6 +278,12 @@ public partial class MainWindow : Window
             HeaderTitleText.Text = "Storage & Settings";
             HeaderSubtitleText.Text = "Accurate filesystem measurements, inventory breakdown, and cache pruning";
             _ = LoadSettingsStorageDataAsync();
+        }
+        else if (NavUpdateCenterButton != null && NavUpdateCenterButton.IsChecked == true)
+        {
+            if (UpdateCenterPage != null) UpdateCenterPage.Visibility = Visibility.Visible;
+            HeaderTitleText.Text = "Update Center";
+            HeaderSubtitleText.Text = "Keep Helium Pro and the browser up to date.";
         }
     }
 
@@ -744,6 +762,176 @@ public partial class MainWindow : Window
         catch (Exception ex)
         {
             ShowStatus($"Failed to start guest session: {ex.Message}", isError: true);
+        }
+    }
+
+    // =========================================================================
+    // UPDATE CENTER
+    // =========================================================================
+
+    private async void InitializeUpdateCenterPage()
+    {
+        // Pre-populate the installed browser version (best effort)
+        try
+        {
+            var result = await _updateService.CheckBrowserUpdateAsync();
+            _latestBrowserResult = result;
+            BrowserInstalledVersion.Text = result.InstalledVersion;
+            if (result.Status == UpdateCheckStatus.Error)
+            {
+                BrowserUpdateStatus.Text = result.ErrorMessage ?? "Browser not detected.";
+            }
+        }
+        catch
+        {
+            BrowserInstalledVersion.Text = "Unknown";
+        }
+    }
+
+    private async void OnCheckLauncherUpdateClick(object sender, RoutedEventArgs e)
+    {
+        CheckLauncherUpdateButton.IsEnabled = false;
+        LauncherUpdateStatus.Text = "Checking...";
+        LauncherAvailableVersion.Visibility = Visibility.Collapsed;
+        LauncherReleaseNotes.Visibility = Visibility.Collapsed;
+        DownloadInstallButton.IsEnabled = false;
+
+        try
+        {
+            _latestLauncherResult = await _updateService.CheckLauncherUpdateAsync("1.0.0");
+
+            switch (_latestLauncherResult.Status)
+            {
+                case UpdateCheckStatus.UpToDate:
+                    LauncherUpdateStatus.Text = "✓ Helium Pro is up to date.";
+                    LauncherUpdateStatus.Foreground = new SolidColorBrush(Color.FromRgb(52, 211, 153));
+                    break;
+
+                case UpdateCheckStatus.UpdateAvailable:
+                    LauncherUpdateStatus.Text = $"Update available!";
+                    LauncherUpdateStatus.Foreground = new SolidColorBrush(Color.FromRgb(251, 191, 36));
+                    LauncherAvailableVersion.Text = $"Available version: {_latestLauncherResult.AvailableVersion}";
+                    LauncherAvailableVersion.Visibility = Visibility.Visible;
+
+                    if (!string.IsNullOrWhiteSpace(_latestLauncherResult.ReleaseNotes))
+                    {
+                        var notes = _latestLauncherResult.ReleaseNotes!;
+                        LauncherReleaseNotes.Text = notes.Length > 400 ? notes[..400] + "…" : notes;
+                        LauncherReleaseNotes.Visibility = Visibility.Visible;
+                    }
+
+                    DownloadInstallButton.IsEnabled = !string.IsNullOrEmpty(_latestLauncherResult.DownloadUrl);
+                    break;
+
+                case UpdateCheckStatus.Error:
+                    LauncherUpdateStatus.Text = $"Error: {_latestLauncherResult.ErrorMessage}";
+                    LauncherUpdateStatus.Foreground = new SolidColorBrush(Color.FromRgb(251, 113, 133));
+                    break;
+            }
+        }
+        catch (Exception ex)
+        {
+            LauncherUpdateStatus.Text = $"Unexpected error: {ex.Message}";
+        }
+        finally
+        {
+            CheckLauncherUpdateButton.IsEnabled = true;
+        }
+    }
+
+    private async void OnDownloadAndInstallClick(object sender, RoutedEventArgs e)
+    {
+        if (_latestLauncherResult?.DownloadUrl is not { Length: > 0 } downloadUrl)
+            return;
+
+        DownloadInstallButton.IsEnabled = false;
+        CheckLauncherUpdateButton.IsEnabled = false;
+        LauncherDownloadProgress.Value = 0;
+        LauncherDownloadProgress.Visibility = Visibility.Visible;
+        LauncherUpdateStatus.Text = "Downloading...";
+
+        try
+        {
+            var destDir = Path.Combine(Path.GetTempPath(), "HeliumProUpdate");
+            var fileName = Path.GetFileName(new Uri(downloadUrl).LocalPath);
+            if (string.IsNullOrEmpty(fileName)) fileName = "HeliumProSetup.exe";
+            var destPath = Path.Combine(destDir, fileName);
+
+            var progress = new Progress<int>(pct =>
+                Dispatcher.Invoke(() => LauncherDownloadProgress.Value = pct));
+
+            _downloadedInstallerPath = await _updateService.DownloadLauncherInstallerAsync(
+                downloadUrl, destPath, progress);
+
+            LauncherUpdateStatus.Text = "Download complete. Launching installer…";
+            await Task.Delay(600);
+            UpdateService.LaunchInstallerAndExit(_downloadedInstallerPath,
+                () => Application.Current.Shutdown());
+        }
+        catch (Exception ex)
+        {
+            LauncherUpdateStatus.Text = $"Download failed: {ex.Message}";
+            LauncherUpdateStatus.Foreground = new SolidColorBrush(Color.FromRgb(251, 113, 133));
+            DownloadInstallButton.IsEnabled = true;
+            CheckLauncherUpdateButton.IsEnabled = true;
+            LauncherDownloadProgress.Visibility = Visibility.Collapsed;
+        }
+    }
+
+    private async void OnCheckBrowserUpdateClick(object sender, RoutedEventArgs e)
+    {
+        CheckBrowserUpdateButton.IsEnabled = false;
+        BrowserUpdateStatus.Text = "Checking...";
+        BrowserAvailableVersion.Visibility = Visibility.Collapsed;
+        OpenBrowserDownloadButton.IsEnabled = false;
+
+        try
+        {
+            _latestBrowserResult = await _updateService.CheckBrowserUpdateAsync();
+            BrowserInstalledVersion.Text = _latestBrowserResult.InstalledVersion;
+
+            switch (_latestBrowserResult.Status)
+            {
+                case UpdateCheckStatus.UpToDate:
+                    BrowserUpdateStatus.Text = "✓ Helium Browser is up to date.";
+                    BrowserUpdateStatus.Foreground = new SolidColorBrush(Color.FromRgb(52, 211, 153));
+                    break;
+
+                case UpdateCheckStatus.UpdateAvailable:
+                    BrowserUpdateStatus.Text = "Browser update available!";
+                    BrowserUpdateStatus.Foreground = new SolidColorBrush(Color.FromRgb(251, 191, 36));
+                    BrowserAvailableVersion.Text = $"Available version: {_latestBrowserResult.AvailableVersion}";
+                    BrowserAvailableVersion.Visibility = Visibility.Visible;
+                    OpenBrowserDownloadButton.IsEnabled = true;
+                    break;
+
+                case UpdateCheckStatus.Error:
+                    BrowserUpdateStatus.Text = $"Error: {_latestBrowserResult.ErrorMessage}";
+                    BrowserUpdateStatus.Foreground = new SolidColorBrush(Color.FromRgb(251, 113, 133));
+                    break;
+            }
+        }
+        catch (Exception ex)
+        {
+            BrowserUpdateStatus.Text = $"Unexpected error: {ex.Message}";
+        }
+        finally
+        {
+            CheckBrowserUpdateButton.IsEnabled = true;
+        }
+    }
+
+    private void OnOpenBrowserDownloadPageClick(object sender, RoutedEventArgs e)
+    {
+        var url = _latestBrowserResult?.ReleaseUrl
+                  ?? "https://github.com/imputnet/helium-windows/releases/latest";
+        try
+        {
+            Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
+        }
+        catch (Exception ex)
+        {
+            BrowserUpdateStatus.Text = $"Could not open browser: {ex.Message}";
         }
     }
 }

@@ -4,3 +4,34 @@ obj/
 *.suo
 .vs/
 dist/
+
+# Secrets and credentials — NEVER commit these
+*.hsv
+*.hsv.bak
+*.hsv.tmp
+manifest.json
+*.pfx
+*.p12
+*.key
+*.pem
+
+# OS and editor artifacts
+.DS_Store
+Thumbs.db
+*.swp
+*~
+.idea/
+
+# NuGet package cache
+packages/
+*.nupkg
+
+# Test results and coverage
+TestResults/
+*.coverage
+*.coveragexml
+coverage/
+
+# Crash dumps
+*.dmp
+*.mdmp

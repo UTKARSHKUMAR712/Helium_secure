@@ -84,6 +84,16 @@
                                 <TextBlock Text="Storage &amp; Settings" VerticalAlignment="Center"/>
                             </StackPanel>
                         </RadioButton>
+
+                        <!-- Update Center Tab -->
+                        <RadioButton x:Name="NavUpdateCenterButton" Style="{StaticResource NavTabButton}" GroupName="NavTabs" Checked="OnNavTabChecked">
+                            <StackPanel Orientation="Horizontal">
+                                <Path Data="M21 10.5h-3v-7h-6v7H9l6 6 6-6zm-18 7h18v2H3z"
+                                      Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}"
+                                      Width="16" Height="16" Stretch="Uniform" Margin="0,0,12,0" VerticalAlignment="Center"/>
+                                <TextBlock Text="Update Center" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </RadioButton>
                     </StackPanel>
                 </ScrollViewer>
 
@@ -765,6 +775,114 @@
                             </DataTemplate>
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>
+                </StackPanel>
+            </ScrollViewer>
+
+            <!-- ========================================== -->
+            <!-- VIEW 5: UPDATE CENTER PAGE                 -->
+            <!-- ========================================== -->
+            <ScrollViewer x:Name="UpdateCenterPage" Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Padding="28,24" Visibility="Collapsed">
+                <StackPanel>
+                    <!-- Page header -->
+                    <Grid Margin="0,0,0,20">
+                        <StackPanel>
+                            <TextBlock Text="UPDATE CENTER" FontSize="11" FontWeight="Bold" Foreground="#818CF8"/>
+                            <TextBlock Text="Keep Helium Pro and the browser up to date." FontSize="13" Foreground="#94A3B8" Margin="0,4,0,0"/>
+                        </StackPanel>
+                    </Grid>
+
+                    <!-- ── Section 1: Launcher ── -->
+                    <Border Background="#121727" CornerRadius="12" BorderBrush="#1E273D" BorderThickness="1" Padding="22" Margin="0,0,0,18">
+                        <StackPanel>
+                            <TextBlock Text="HELIUM PRO LAUNCHER" FontSize="11" FontWeight="Bold" Foreground="#818CF8" Margin="0,0,0,10"/>
+
+                            <Grid Margin="0,0,0,10">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0">
+                                    <TextBlock Text="INSTALLED VERSION" FontSize="10" Foreground="#475569"/>
+                                    <TextBlock Text="1.0.0" FontSize="18" FontWeight="Bold" Foreground="#FFFFFF" Margin="0,2,0,0"/>
+                                </StackPanel>
+                                <StackPanel Grid.Column="1">
+                                    <TextBlock Text="RELEASE CHANNEL" FontSize="10" Foreground="#475569"/>
+                                    <TextBlock Text="Stable" FontSize="18" FontWeight="Bold" Foreground="#34D399" Margin="0,2,0,0"/>
+                                </StackPanel>
+                            </Grid>
+
+                            <TextBlock x:Name="LauncherUpdateStatus" Text="Press 'Check for Updates' to check." Foreground="#64748B" FontSize="12" Margin="0,4,0,4"/>
+                            <TextBlock x:Name="LauncherAvailableVersion" Foreground="#818CF8" FontSize="12" Margin="0,2,0,2" Visibility="Collapsed"/>
+                            <TextBlock x:Name="LauncherReleaseNotes" TextWrapping="Wrap" Foreground="#94A3B8" FontSize="11" Margin="0,6,0,6" Visibility="Collapsed"/>
+
+                            <ProgressBar x:Name="LauncherDownloadProgress" Minimum="0" Maximum="100" Height="6" Margin="0,8,0,8"
+                                         Foreground="#6366F1" Background="#1E273D" Visibility="Collapsed"/>
+
+                            <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                                <Button x:Name="CheckLauncherUpdateButton" Style="{StaticResource SecondaryButton}" Height="34" Padding="14,0"
+                                        Click="OnCheckLauncherUpdateClick" Margin="0,0,10,0">
+                                    <TextBlock Text="Check for Updates" FontSize="12" FontWeight="SemiBold"/>
+                                </Button>
+                                <Button x:Name="DownloadInstallButton" Style="{StaticResource PrimaryButton}" Height="34" Padding="14,0"
+                                        Click="OnDownloadAndInstallClick" IsEnabled="False">
+                                    <TextBlock Text="Download &amp; Install" FontSize="12" FontWeight="SemiBold"/>
+                                </Button>
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- ── Section 2: Browser ── -->
+                    <Border Background="#121727" CornerRadius="12" BorderBrush="#1E273D" BorderThickness="1" Padding="22" Margin="0,0,0,18">
+                        <StackPanel>
+                            <TextBlock Text="HELIUM BROWSER" FontSize="11" FontWeight="Bold" Foreground="#818CF8" Margin="0,0,0,10"/>
+
+                            <Grid Margin="0,0,0,10">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0">
+                                    <TextBlock Text="INSTALLED VERSION" FontSize="10" Foreground="#475569"/>
+                                    <TextBlock x:Name="BrowserInstalledVersion" Text="Detecting..." FontSize="18" FontWeight="Bold" Foreground="#FFFFFF" Margin="0,2,0,0"/>
+                                </StackPanel>
+                                <StackPanel Grid.Column="1">
+                                    <TextBlock Text="SOURCE" FontSize="10" Foreground="#475569"/>
+                                    <TextBlock Text="github.com/imputnet/helium-windows" FontSize="11" Foreground="#64748B" Margin="0,4,0,0" TextWrapping="Wrap"/>
+                                </StackPanel>
+                            </Grid>
+
+                            <TextBlock x:Name="BrowserUpdateStatus" Text="Press 'Check for Browser Updates' to check." Foreground="#64748B" FontSize="12" Margin="0,4,0,4"/>
+                            <TextBlock x:Name="BrowserAvailableVersion" Foreground="#818CF8" FontSize="12" Margin="0,2,0,2" Visibility="Collapsed"/>
+
+                            <Border Background="#0B1020" CornerRadius="6" BorderBrush="#1E273D" BorderThickness="1" Padding="12,8" Margin="0,8,0,8">
+                                <TextBlock TextWrapping="Wrap" FontSize="11" Foreground="#64748B">
+                                    <Run FontWeight="SemiBold" Foreground="#94A3B8">Note:</Run>
+                                    <Run>The browser update will open the official GitHub release page. You can download the x64 installer from there.</Run>
+                                </TextBlock>
+                            </Border>
+
+                            <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                                <Button x:Name="CheckBrowserUpdateButton" Style="{StaticResource SecondaryButton}" Height="34" Padding="14,0"
+                                        Click="OnCheckBrowserUpdateClick" Margin="0,0,10,0">
+                                    <TextBlock Text="Check for Browser Updates" FontSize="12" FontWeight="SemiBold"/>
+                                </Button>
+                                <Button x:Name="OpenBrowserDownloadButton" Style="{StaticResource PrimaryButton}" Height="34" Padding="14,0"
+                                        Click="OnOpenBrowserDownloadPageClick" IsEnabled="False">
+                                    <TextBlock Text="Open Download Page" FontSize="12" FontWeight="SemiBold"/>
+                                </Button>
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- ── Section 3: Info card ── -->
+                    <Border Background="#121727" CornerRadius="12" BorderBrush="#1E273D" BorderThickness="1" Padding="22" Margin="0,0,0,18">
+                        <StackPanel>
+                            <TextBlock Text="ZERO-IMPACT UPDATES" FontSize="11" FontWeight="Bold" Foreground="#34D399" Margin="0,0,0,8"/>
+                            <TextBlock TextWrapping="Wrap" FontSize="12" Foreground="#94A3B8" LineHeight="20">
+                                All updates are applied outside the running session — your encrypted vaults are never touched during the update process. AES-256-GCM vault integrity is preserved across launcher updates. Browser profile data is independently stored and is unaffected by browser binary upgrades.
+                            </TextBlock>
+                        </StackPanel>
+                    </Border>
                 </StackPanel>
             </ScrollViewer>
         </Grid>
