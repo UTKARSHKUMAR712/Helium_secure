@@ -30,6 +30,7 @@ PrivilegesRequiredOverridesAllowed=dialog
 ; Output configuration
 OutputDir=..\dist
 OutputBaseFilename=HeliumSecure-Setup
+SetupIconFile=..\src\HeliumSecure\Assets\app.ico
 Compression=lzma2/max
 SolidCompression=yes
 

@@ -15,16 +15,26 @@ $StagingDir = "$OutputDir\HeliumSecure"
 $ZipPath = "$OutputDir\HeliumSecure_v1.0.0_win-x64.zip"
 $SetupExePath = "$OutputDir\HeliumSecure-Setup.exe"
 
-# Step 1: Ensure directories exist
-Write-Host "`n[1/6] Preparing staging directories..." -ForegroundColor Yellow
+# Step 1: Clean legacy artifacts and ensure staging directories exist
+Write-Host "`n[1/6] Cleaning legacy artifacts and preparing staging directories..." -ForegroundColor Yellow
+$LegacyProDir = "$OutputDir\HeliumPro"
+if (Test-Path $LegacyProDir) {
+    Write-Host "Removing legacy directory: $LegacyProDir"
+    Remove-Item -Path $LegacyProDir -Recurse -Force -ErrorAction SilentlyContinue
+}
+Get-ChildItem -Path $OutputDir -Filter "HeliumPro*.zip" -ErrorAction SilentlyContinue | ForEach-Object {
+    Write-Host "Removing legacy zip: $($_.FullName)"
+    Remove-Item -Path $_.FullName -Force -ErrorAction SilentlyContinue
+}
+
+if (-not (Test-Path $OutputDir)) {
+    New-Item -ItemType Directory -Force -Path $OutputDir | Out-Null
+}
 if (-not (Test-Path $StagingDir)) {
     New-Item -ItemType Directory -Force -Path $StagingDir | Out-Null
 }
 if (-not (Test-Path "$StagingDir\browser")) {
     New-Item -ItemType Directory -Force -Path "$StagingDir\browser" | Out-Null
-}
-if (-not (Test-Path $OutputDir)) {
-    New-Item -ItemType Directory -Force -Path $OutputDir | Out-Null
 }
 
 # Step 2: Publish Launcher
@@ -62,19 +72,19 @@ if (Test-Path $InstallerScriptSource) {
     Copy-Item -Path $InstallerScriptSource -Destination "$StagingDir\Install-HeliumSecure.ps1" -Force
 }
 
-# Step 4: Run Automated Verification Tests
-Write-Host "`n[4/6] Running automated verification test suite..." -ForegroundColor Yellow
-dotnet test "$RepoRoot\HeliumSecure.sln" -c $Configuration --logger "console;verbosity=normal"
-if ($LASTEXITCODE -ne 0) {
-    Write-Error "Verification tests failed! Packaging aborted."
-}
-
-# Step 5: Create Distribution ZIP
-Write-Host "`n[5/6] Generating distribution archive ($ZipPath)..." -ForegroundColor Yellow
+# Step 4: Create Distribution ZIP
+Write-Host "`n[4/6] Generating distribution archive ($ZipPath)..." -ForegroundColor Yellow
 if (Test-Path $ZipPath) {
     Remove-Item -Force $ZipPath
 }
 Compress-Archive -Path "$StagingDir\*" -DestinationPath $ZipPath -CompressionLevel Optimal
+
+# Step 5: Run Automated Verification Tests
+Write-Host "`n[5/6] Running automated verification test suite..." -ForegroundColor Yellow
+dotnet test "$RepoRoot\HeliumSecure.sln" -c $Configuration --logger "console;verbosity=normal"
+if ($LASTEXITCODE -ne 0) {
+    Write-Error "Verification tests failed! Packaging aborted."
+}
 
 # Step 6: Build Windows Setup.exe via Inno Setup
 Write-Host "`n[6/6] Compiling Windows Installer (HeliumSecure-Setup.exe)..." -ForegroundColor Yellow
