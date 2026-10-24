@@ -107,4 +107,47 @@ public class VaultManagerTests : IDisposable
         VaultManager.UnlockVault(vaultPath, profileId, password, workingDir);
         Assert.True(File.Exists(Path.Combine(workingDir, "Default", "Preferences")));
     }
+
+    [Fact]
+    public void ChangeVaultPassword_WithCorrectOldPassword_ReEncryptsAndCanBeUnlockedWithNewPassword()
+    {
+        var profileId = Guid.NewGuid();
+        string vaultPath = Path.Combine(_testRoot, $"{profileId}.hsv");
+        string workingDir = Path.Combine(_testRoot, "working_new");
+        string oldPassword = "OldSecurePassword123!";
+        string newPassword = "NewSecurePassword456!";
+
+        VaultManager.InitializeNewVault(vaultPath, profileId, oldPassword, _fastConfig);
+
+        // Change password in memory
+        VaultManager.ChangeVaultPassword(vaultPath, profileId, oldPassword, newPassword, _fastConfig);
+
+        // Verify old password fails
+        string failDir = Path.Combine(_testRoot, "working_fail");
+        Assert.ThrowsAny<CryptographicException>(() =>
+            VaultManager.UnlockVault(vaultPath, profileId, oldPassword, failDir));
+
+        // Verify new password unlocks successfully
+        VaultManager.UnlockVault(vaultPath, profileId, newPassword, workingDir);
+        Assert.True(File.Exists(Path.Combine(workingDir, "Default", "Preferences")));
+    }
+
+    [Fact]
+    public void ChangeVaultPassword_WithWrongOldPassword_ThrowsAndPreservesOriginalVault()
+    {
+        var profileId = Guid.NewGuid();
+        string vaultPath = Path.Combine(_testRoot, $"{profileId}.hsv");
+        string workingDir = Path.Combine(_testRoot, "working_orig");
+        string originalPassword = "OriginalPassword123!";
+
+        VaultManager.InitializeNewVault(vaultPath, profileId, originalPassword, _fastConfig);
+
+        // Attempting to change with wrong old password fails
+        Assert.ThrowsAny<CryptographicException>(() =>
+            VaultManager.ChangeVaultPassword(vaultPath, profileId, "WrongOldPassword!", "NewPassword999!", _fastConfig));
+
+        // Vault should still be intact and unlockable with original password
+        VaultManager.UnlockVault(vaultPath, profileId, originalPassword, workingDir);
+        Assert.True(File.Exists(Path.Combine(workingDir, "Default", "Preferences")));
+    }
 }

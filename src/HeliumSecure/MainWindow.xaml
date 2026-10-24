@@ -524,6 +524,7 @@
 
                                     <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
                                         <Button x:Name="ClearStorageButton" Content="Prune Storage" Style="{StaticResource SecondaryButton}" Height="36" Padding="14,0" Margin="0,0,10,0" Click="OnClearStorageClick"/>
+                                        <Button x:Name="ChangePasswordButton" Content="Change Password" Style="{StaticResource SecondaryButton}" Height="36" Padding="14,0" Margin="0,0,10,0" Click="OnChangePasswordClick"/>
                                         <Button x:Name="RenameButton" Content="Rename" Style="{StaticResource SecondaryButton}" Height="36" Padding="14,0" Click="OnRenameClick"/>
                                     </StackPanel>
 

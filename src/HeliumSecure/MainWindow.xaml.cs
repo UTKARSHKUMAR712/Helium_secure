@@ -599,6 +599,32 @@ public partial class MainWindow : Window
         }
     }
 
+    private void OnChangePasswordClick(object sender, RoutedEventArgs e)
+    {
+        if (_selectedItem == null) return;
+
+        if (_profileManager.IsProfileLocked(_selectedItem.Id))
+        {
+            ShowStatus("Cannot change password while the browser session is active.", isError: true);
+            return;
+        }
+
+        if (_profileManager.IsProfileLockedOut(_selectedItem.Id, out var remaining, out _))
+        {
+            ShowStatus($"Cannot change password while profile is locked out ({(int)remaining.TotalMinutes}m remaining).", isError: true);
+            return;
+        }
+
+        var dialog = new ChangePasswordWindow(_profileManager, _selectedItem.Id, _selectedItem.Name) { Owner = this };
+        if (dialog.ShowDialog() == true)
+        {
+            ShowStatus("Master password updated successfully. Vault re-encrypted with fresh salt.", isError: false);
+            ProfilePasswordBox.Password = string.Empty;
+            ProfilePasswordTextBox.Text = string.Empty;
+            UpdateDetailsView();
+        }
+    }
+
     private void OnDeleteClick(object sender, RoutedEventArgs e)
     {
         if (_selectedItem == null) return;

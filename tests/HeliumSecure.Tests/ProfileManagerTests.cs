@@ -104,4 +104,60 @@ public class ProfileManagerTests : IDisposable
 
         Assert.True(pm.IsProfileLocked(profile.Id));
     }
+
+    [Fact]
+    public void ChangePassword_WithCorrectCurrentPassword_ReEncryptsAndAllowsNewPassword()
+    {
+        var pm = new ProfileManager(_testRoot, _fastConfig);
+        var profile = pm.CreateProfile("PasswordChangeTest", "CurrentPass123!");
+
+        pm.ChangePassword(profile.Id, "CurrentPass123!", "NewSecretPass456!");
+
+        // Old password should now fail validation
+        var failResult = pm.ValidatePasswordAttempt(profile.Id, "CurrentPass123!");
+        Assert.Equal(AuthenticationStatus.InvalidPassword, failResult.Status);
+
+        // New password should succeed
+        var successResult = pm.ValidatePasswordAttempt(profile.Id, "NewSecretPass456!");
+        Assert.Equal(AuthenticationStatus.Success, successResult.Status);
+    }
+
+    [Fact]
+    public void ChangePassword_WithWrongCurrentPassword_FailsAndEnforcesAttemptPolicy()
+    {
+        var pm = new ProfileManager(_testRoot, _fastConfig);
+        var profile = pm.CreateProfile("PasswordPolicyTest", "OriginalPass123!");
+
+        // First wrong attempt
+        Assert.Throws<AuthenticationFailedException>(() =>
+            pm.ChangePassword(profile.Id, "WrongPass1!", "NewPass123!"));
+        Assert.Equal(2, pm.GetRemainingAttempts(profile.Id, out _));
+
+        // Second wrong attempt
+        Assert.Throws<AuthenticationFailedException>(() =>
+            pm.ChangePassword(profile.Id, "WrongPass2!", "NewPass123!"));
+        Assert.Equal(1, pm.GetRemainingAttempts(profile.Id, out _));
+
+        // Third wrong attempt -> locks out
+        Assert.Throws<ProfileLockedOutException>(() =>
+            pm.ChangePassword(profile.Id, "WrongPass3!", "NewPass123!"));
+        Assert.True(pm.IsProfileLockedOut(profile.Id, out _, out _));
+    }
+
+    [Fact]
+    public void ChangePassword_WhenProfileActive_ThrowsProfileAlreadyLockedException()
+    {
+        var pm = new ProfileManager(_testRoot, _fastConfig);
+        var profile = pm.CreateProfile("ActiveProfileTest", "CurrentPass123!");
+
+        string workingDir = pm.GetProfileWorkingDirectory(profile.Id);
+        Directory.CreateDirectory(workingDir);
+        string lockFile = Path.Combine(pm.GetProfileWorkingDirectory(profile.Id) + ".lock");
+
+        using (var stream = new FileStream(lockFile, FileMode.Create, FileAccess.ReadWrite, FileShare.None))
+        {
+            Assert.Throws<ProfileAlreadyLockedException>(() =>
+                pm.ChangePassword(profile.Id, "CurrentPass123!", "NewPass456!"));
+        }
+    }
 }

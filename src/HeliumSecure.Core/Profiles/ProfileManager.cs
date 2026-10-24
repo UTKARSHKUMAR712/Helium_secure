@@ -521,6 +521,57 @@ public sealed class ProfileManager
         ExecuteTerminalDestruction(profileId);
     }
 
+    /// <summary>
+    /// Changes the master password of an existing profile vault.
+    /// Requires verifying current password against the two-stage attempt policy first.
+    /// Re-encrypts the vault in memory without extracting working files to disk.
+    /// </summary>
+    public void ChangePassword(Guid profileId, string currentPassword, string newPassword)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(currentPassword);
+        ArgumentException.ThrowIfNullOrWhiteSpace(newPassword);
+
+        var profile = Manifest.Profiles.FirstOrDefault(p => p.Id == profileId)
+            ?? throw new KeyNotFoundException($"Profile '{profileId}' not found.");
+
+        if (IsProfileLocked(profileId))
+        {
+            throw new ProfileAlreadyLockedException("Cannot change password while the profile is active or open in a browser session.");
+        }
+
+        if (IsProfileLockedOut(profileId, out var remainingTime, out var inSecondStage))
+        {
+            throw new ProfileLockedOutException(remainingTime, inSecondStage);
+        }
+
+        // Authenticate current password against attempt limit policy
+        var authResult = ValidatePasswordAttempt(profileId, currentPassword);
+        if (authResult.Status == AuthenticationStatus.LockedOut)
+        {
+            throw new ProfileLockedOutException(authResult.RemainingLockout ?? TimeSpan.FromMinutes(30), authResult.InSecondStage);
+        }
+        if (authResult.Status == AuthenticationStatus.TerminalDestruction)
+        {
+            throw new TerminalDestructionException(profileId);
+        }
+        if (authResult.Status == AuthenticationStatus.InvalidPassword)
+        {
+            throw new AuthenticationFailedException(
+                authResult.Message ?? "Invalid current password.",
+                authResult.RemainingAttempts,
+                authResult.InSecondStage);
+        }
+
+        string vaultPath = GetVaultPath(profileId);
+        VaultManager.ChangeVaultPassword(vaultPath, profileId, currentPassword, newPassword, _cryptoConfig);
+
+        lock (_manifestLock)
+        {
+            profile.LastUsedAt = _clock.UtcNow;
+            Manifest.Save(_manifestPath);
+        }
+    }
+
     public bool IsProfileLocked(Guid profileId)
     {
         if (_activeLocks.ContainsKey(profileId)) return true;

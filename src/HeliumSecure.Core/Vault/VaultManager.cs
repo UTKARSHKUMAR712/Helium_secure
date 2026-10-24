@@ -314,6 +314,132 @@ public sealed class VaultManager
     }
 
     /// <summary>
+    /// Re-encrypts the vault file with a new password in memory without extracting files to disk.
+    /// Derives a new Argon2id key with a fresh salt and encrypts with a fresh nonce.
+    /// Uses atomic swap (.tmp -> .bak -> committed) to ensure fail-safe operation.
+    /// Memory buffers are wiped immediately.
+    /// </summary>
+    public static void ChangeVaultPassword(
+        string vaultPath,
+        Guid profileId,
+        string currentPassword,
+        string newPassword,
+        VaultCryptoConfig? config = null)
+    {
+        config ??= VaultCryptoConfig.Default;
+        ArgumentException.ThrowIfNullOrWhiteSpace(vaultPath);
+        ArgumentException.ThrowIfNullOrWhiteSpace(currentPassword);
+        ArgumentException.ThrowIfNullOrWhiteSpace(newPassword);
+
+        if (!File.Exists(vaultPath))
+        {
+            throw new FileNotFoundException($"Vault file not found at '{vaultPath}'.");
+        }
+
+        VaultFileHeader oldHeader;
+        byte[] oldCiphertext;
+
+        using (var fs = new FileStream(vaultPath, FileMode.Open, FileAccess.Read, FileShare.Read))
+        using (var reader = new BinaryReader(fs))
+        {
+            oldHeader = VaultFileHeader.ReadFrom(reader);
+            oldCiphertext = reader.ReadBytes((int)oldHeader.CiphertextLength);
+            if (oldCiphertext.Length != oldHeader.CiphertextLength)
+            {
+                throw new InvalidDataException("Vault file ended unexpectedly.");
+            }
+        }
+
+        var oldConfig = new VaultCryptoConfig(
+            SaltSizeBytes: oldHeader.Salt.Length,
+            Iterations: oldHeader.Iterations,
+            MemorySizeKb: oldHeader.MemorySizeKb,
+            DegreeOfParallelism: oldHeader.DegreeOfParallelism,
+            KeySizeBytes: 32,
+            NonceSizeBytes: oldHeader.Nonce.Length,
+            TagSizeBytes: oldHeader.Tag.Length
+        );
+
+        byte[] oldKey = Argon2Helper.DeriveKey(currentPassword, oldHeader.Salt, oldConfig);
+        byte[]? archiveBytes = null;
+        byte[]? newKey = null;
+
+        try
+        {
+            archiveBytes = AesGcmVaultCrypto.Decrypt(
+                oldCiphertext,
+                oldKey,
+                oldHeader.Nonce,
+                oldHeader.Tag,
+                GetAad(profileId)
+            );
+
+            // Generate fresh salt and fresh key for new password
+            byte[] newSalt = Argon2Helper.GenerateSalt(config.SaltSizeBytes);
+            newKey = Argon2Helper.DeriveKey(newPassword, newSalt, config);
+
+            var (newCiphertext, newNonce, newTag) = AesGcmVaultCrypto.Encrypt(
+                archiveBytes,
+                newKey,
+                GetAad(profileId),
+                config.NonceSizeBytes,
+                config.TagSizeBytes);
+
+            var newHeader = new VaultFileHeader
+            {
+                Version = VaultFileHeader.CurrentVersion,
+                Salt = newSalt,
+                MemorySizeKb = config.MemorySizeKb,
+                Iterations = config.Iterations,
+                DegreeOfParallelism = config.DegreeOfParallelism,
+                Nonce = newNonce,
+                Tag = newTag,
+                CiphertextLength = newCiphertext.Length
+            };
+
+            string tmpPath = vaultPath + ".tmp";
+            string bakPath = vaultPath + ".bak";
+
+            using (var fs = new FileStream(tmpPath, FileMode.Create, FileAccess.Write, FileShare.None))
+            using (var writer = new BinaryWriter(fs))
+            {
+                newHeader.WriteTo(writer);
+                writer.Write(newCiphertext);
+                fs.Flush(flushToDisk: true);
+            }
+
+            // Verify the newly written tmp file
+            using (var fs = new FileStream(tmpPath, FileMode.Open, FileAccess.Read, FileShare.Read))
+            using (var reader = new BinaryReader(fs))
+            {
+                var verifiedHeader = VaultFileHeader.ReadFrom(reader);
+                if (verifiedHeader.CiphertextLength != newCiphertext.Length)
+                {
+                    throw new InvalidDataException("Verification of written re-encrypted vault failed.");
+                }
+            }
+
+            // Safe atomic swap: primary -> bak, tmp -> primary
+            File.Move(vaultPath, bakPath, overwrite: true);
+            File.Move(tmpPath, vaultPath, overwrite: true);
+            NtfsSecurityHelper.SecureFile(vaultPath);
+
+            // Once committed, clean the bak file
+            if (File.Exists(bakPath))
+            {
+                try { File.Delete(bakPath); } catch { /* best effort */ }
+            }
+        }
+        finally
+        {
+            AesGcmVaultCrypto.Wipe(oldKey);
+            AesGcmVaultCrypto.Wipe(newKey);
+            AesGcmVaultCrypto.Wipe(archiveBytes);
+            AesGcmVaultCrypto.Wipe(oldCiphertext);
+        }
+    }
+
+    /// <summary>
     /// Archives and encrypts the working directory into the vault using atomic swap and safe recovery.
     /// Cleans up the working directory afterwards.
     /// </summary>
