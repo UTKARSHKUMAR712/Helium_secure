@@ -359,6 +359,18 @@ public partial class MainWindow : Window
         }
     }
 
+    private ProfileDisplayItem? ResolveProfileItem(object? sender)
+    {
+        if (sender is FrameworkElement fe)
+        {
+            if (fe.DataContext is ProfileDisplayItem itemFromContext) return itemFromContext;
+            if (fe.Tag is ProfileDisplayItem itemFromTag) return itemFromTag;
+            if (fe.Tag is Guid id) return _allProfiles.FirstOrDefault(p => p.Id == id);
+            if (fe.DataContext is ProfileInfo pi) return _allProfiles.FirstOrDefault(p => p.Id == pi.Id);
+        }
+        return null;
+    }
+
     private void OnRecentProfileCardClick(object sender, MouseButtonEventArgs e)
     {
         if (e.OriginalSource is DependencyObject source)
@@ -371,17 +383,20 @@ public partial class MainWindow : Window
             }
         }
 
-        if (sender is FrameworkElement fe && fe.Tag is ProfileDisplayItem item)
+        var item = ResolveProfileItem(sender);
+        if (item != null)
         {
-            ToggleProfileExpansion(item, fe);
+            var container = sender as FrameworkElement;
+            ToggleProfileExpansion(item, container);
         }
     }
 
     private void OnRecentProfileCardToggleClick(object sender, RoutedEventArgs e)
     {
-        if (sender is FrameworkElement fe && fe.Tag is ProfileDisplayItem item)
+        var item = ResolveProfileItem(sender);
+        if (item != null)
         {
-            var card = FindVisualAncestor<Border>(fe);
+            var card = (sender is DependencyObject d ? FindVisualAncestor<Border>(d) : null) ?? sender as FrameworkElement;
             ToggleProfileExpansion(item, card);
         }
     }
@@ -398,12 +413,14 @@ public partial class MainWindow : Window
                 {
                     other.IsExpanded = false;
                     other.QuickErrorMessage = string.Empty;
+                    other.RefreshProperties();
                 }
             }
         }
 
         item.IsExpanded = targetState;
         item.QuickErrorMessage = string.Empty;
+        item.RefreshProperties();
 
         if (targetState && container != null)
         {
@@ -417,10 +434,12 @@ public partial class MainWindow : Window
 
     private void OnQuickUnlockCancelClick(object sender, RoutedEventArgs e)
     {
-        if (sender is FrameworkElement fe && fe.Tag is ProfileDisplayItem item)
+        var item = ResolveProfileItem(sender);
+        if (item != null)
         {
             item.IsExpanded = false;
             item.QuickErrorMessage = string.Empty;
+            item.RefreshProperties();
         }
     }
 
@@ -428,7 +447,8 @@ public partial class MainWindow : Window
     {
         if (e.Key == Key.Enter && sender is PasswordBox pb)
         {
-            if (pb.Tag is ProfileDisplayItem item)
+            var item = ResolveProfileItem(pb);
+            if (item != null)
             {
                 _ = ExecuteQuickUnlockAsync(item, pb.Password, pb);
             }
@@ -437,15 +457,16 @@ public partial class MainWindow : Window
 
     private void OnQuickUnlockSubmitClick(object sender, RoutedEventArgs e)
     {
-        if (sender is FrameworkElement fe && fe.Tag is ProfileDisplayItem item)
+        var item = ResolveProfileItem(sender);
+        if (item != null)
         {
-            var panel = FindVisualAncestor<Border>(fe) ?? FindVisualAncestor<Grid>(fe) as DependencyObject;
-            var pb = panel != null ? FindVisualChild<PasswordBox>(panel) : null;
+            DependencyObject? dep = sender as DependencyObject;
+            DependencyObject? container = dep != null ? ((DependencyObject?)FindVisualAncestor<Border>(dep) ?? FindVisualAncestor<StackPanel>(dep)) : null;
+            var pb = container != null ? FindVisualChild<PasswordBox>(container) : null;
             string password = pb?.Password ?? string.Empty;
             _ = ExecuteQuickUnlockAsync(item, password, pb);
         }
     }
-
     private async Task ExecuteQuickUnlockAsync(ProfileDisplayItem item, string password, PasswordBox? pb)
     {
         if (string.IsNullOrEmpty(password))
