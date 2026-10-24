@@ -237,39 +237,57 @@ public sealed class UpdateService
 
         var totalBytes = response.Content.Headers.ContentLength ?? -1L;
 
-        Directory.CreateDirectory(Path.GetDirectoryName(destPath)!);
+        var targetDir = Path.GetDirectoryName(destPath)!;
+        Directory.CreateDirectory(targetDir);
 
-        await using var contentStream = await response.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
-        await using var fileStream = new FileStream(destPath, FileMode.Create, FileAccess.Write, FileShare.None, 81920, true);
+        string targetFilePath = destPath;
+        FileStream? fileStream = null;
 
-        var buffer = new byte[81920];
-        long downloadedBytes = 0;
-        int read;
-
-        while ((read = await contentStream.ReadAsync(buffer, ct).ConfigureAwait(false)) > 0)
+        try
         {
-            await fileStream.WriteAsync(buffer.AsMemory(0, read), ct).ConfigureAwait(false);
-            downloadedBytes += read;
+            fileStream = new FileStream(targetFilePath, FileMode.Create, FileAccess.Write, FileShare.None, 81920, true);
+        }
+        catch (IOException)
+        {
+            // If the target file is locked by a running installer or antivirus scanner, write to a unique file in the same directory
+            var ext = Path.GetExtension(destPath);
+            var nameWithoutExt = Path.GetFileNameWithoutExtension(destPath);
+            targetFilePath = Path.Combine(targetDir, $"{nameWithoutExt}_{Guid.NewGuid():N[..8]}{ext}");
+            fileStream = new FileStream(targetFilePath, FileMode.Create, FileAccess.Write, FileShare.None, 81920, true);
+        }
 
-            if (progress != null && totalBytes > 0)
+        await using (fileStream.ConfigureAwait(false))
+        {
+            await using var contentStream = await response.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
+            var buffer = new byte[81920];
+            long downloadedBytes = 0;
+            int read;
+
+            while ((read = await contentStream.ReadAsync(buffer, ct).ConfigureAwait(false)) > 0)
             {
-                var pct = (int)Math.Clamp(downloadedBytes * 100 / totalBytes, 0, 100);
-                progress.Report(pct);
+                await fileStream.WriteAsync(buffer.AsMemory(0, read), ct).ConfigureAwait(false);
+                downloadedBytes += read;
+
+                if (progress != null && totalBytes > 0)
+                {
+                    var pct = (int)Math.Clamp(downloadedBytes * 100 / totalBytes, 0, 100);
+                    progress.Report(pct);
+                }
             }
         }
 
         // Validate download completeness and integrity
-        var fileInfo = new FileInfo(destPath);
+        var fileInfo = new FileInfo(targetFilePath);
         if (fileInfo.Length == 0)
             throw new InvalidOperationException("Downloaded installer file is empty.");
 
-        if (totalBytes > 0 && downloadedBytes != totalBytes)
-            throw new InvalidOperationException($"Incomplete download: received {downloadedBytes} bytes, expected {totalBytes} bytes.");
+        if (totalBytes > 0 && fileInfo.Length != totalBytes)
+            throw new InvalidOperationException($"Incomplete download: received {fileInfo.Length} bytes, expected {totalBytes} bytes.");
 
         // If installer is an executable, verify it possesses a valid PE header (MZ magic bytes)
-        if (destPath.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
+        if (targetFilePath.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
         {
-            using var checkFs = new FileStream(destPath, FileMode.Open, FileAccess.Read, FileShare.Read);
+            using var checkFs = new FileStream(targetFilePath, FileMode.Open, FileAccess.Read, FileShare.Read);
             if (checkFs.Length < 64)
                 throw new InvalidDataException("Downloaded file is too small to be a valid Windows executable.");
             var magic = new byte[2];
@@ -278,7 +296,7 @@ public sealed class UpdateService
         }
 
         progress?.Report(100);
-        return destPath;
+        return targetFilePath;
     }
 
     // -----------------------------------------------------------------------

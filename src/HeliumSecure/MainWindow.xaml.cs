@@ -1110,7 +1110,8 @@ public partial class MainWindow : Window
 
         try
         {
-            var destDir = Path.Combine(Path.GetTempPath(), "HeliumSecureUpdate");
+            var runId = Guid.NewGuid().ToString("N")[..8];
+            var destDir = Path.Combine(Path.GetTempPath(), "HeliumSecureUpdate", runId);
             var fileName = Path.GetFileName(new Uri(downloadUrl).LocalPath);
             if (string.IsNullOrEmpty(fileName)) fileName = "HeliumSecure-Setup.exe";
             var destPath = Path.Combine(destDir, fileName);
@@ -1123,8 +1124,11 @@ public partial class MainWindow : Window
 
             LauncherUpdateStatus.Text = "Download complete. Launching installer…";
             await Task.Delay(600);
-            UpdateService.LaunchInstallerAndExit(_downloadedInstallerPath,
-                () => Application.Current.Shutdown());
+            UpdateService.LaunchInstallerAndExit(_downloadedInstallerPath, () =>
+            {
+                try { Application.Current?.Shutdown(); } catch { }
+                Environment.Exit(0);
+            });
         }
         catch (Exception ex)
         {
