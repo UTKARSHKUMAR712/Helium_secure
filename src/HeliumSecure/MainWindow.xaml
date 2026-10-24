@@ -1,0 +1,171 @@
+<Window x:Class="HeliumSecure.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Helium Pro" Height="580" Width="860"
+        WindowStartupLocation="CenterScreen"
+        Background="#0F172A" Foreground="#F8FAFC" FontFamily="Segoe UI"
+        MinWidth="780" MinHeight="500">
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Top Header Bar -->
+        <Border Grid.Row="0" Background="#1E293B" BorderBrush="#334155" BorderThickness="0,0,0,1" Padding="20,14">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                    <Border Width="36" Height="36" CornerRadius="8" Background="#2563EB" Margin="0,0,12,0">
+                        <TextBlock Text="He" FontWeight="Bold" FontSize="18" Foreground="#FFFFFF" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Border>
+                    <StackPanel VerticalAlignment="Center">
+                        <TextBlock Text="Helium Pro" FontSize="18" FontWeight="Bold" Foreground="#FFFFFF"/>
+                        <TextBlock Text="Hardware-Isolated Profile Vaults &amp; Disposable Sessions" FontSize="12" Foreground="#94A3B8"/>
+                    </StackPanel>
+                </StackPanel>
+
+                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                    <Button x:Name="GuestButton" Content="🛡️ Browse as Guest" Width="140" Height="34" Background="#334155" Foreground="#F8FAFC" FontWeight="SemiBold" BorderThickness="0" Margin="0,0,10,0" Click="OnGuestClick" Cursor="Hand"/>
+                    <Button x:Name="NewProfileButton" Content="+ New Profile" Width="110" Height="34" Background="#2563EB" Foreground="#FFFFFF" FontWeight="SemiBold" BorderThickness="0" Click="OnNewProfileClick" Cursor="Hand"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- Main Content Area -->
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="320"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- Left: Profile Selector List -->
+            <Border Grid.Column="0" Background="#131D31" BorderBrush="#334155" BorderThickness="0,0,1,0" Padding="14">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+
+                    <TextBlock Grid.Row="0" Text="PROFILES" FontSize="11" FontWeight="Bold" Foreground="#64748B" Margin="6,4,0,10"/>
+
+                    <ListBox x:Name="ProfilesListBox" Grid.Row="1" Background="Transparent" BorderThickness="0" SelectionChanged="OnProfileSelectionChanged" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                        <ListBox.ItemContainerStyle>
+                            <Style TargetType="ListBoxItem">
+                                <Setter Property="Padding" Value="10,8"/>
+                                <Setter Property="Margin" Value="0,2"/>
+                                <Setter Property="Background" Value="Transparent"/>
+                                <Setter Property="Foreground" Value="#F8FAFC"/>
+                                <Setter Property="Cursor" Value="Hand"/>
+                                <Setter Property="Template">
+                                    <Setter.Value>
+                                        <ControlTemplate TargetType="ListBoxItem">
+                                            <Border x:Name="Border" CornerRadius="6" Background="{TemplateBinding Background}" Padding="{TemplateBinding Padding}">
+                                                <ContentPresenter/>
+                                            </Border>
+                                            <ControlTemplate.Triggers>
+                                                <Trigger Property="IsMouseOver" Value="True">
+                                                    <Setter TargetName="Border" Property="Background" Value="#1E293B"/>
+                                                </Trigger>
+                                                <Trigger Property="IsSelected" Value="True">
+                                                    <Setter TargetName="Border" Property="Background" Value="#2563EB"/>
+                                                </Trigger>
+                                            </ControlTemplate.Triggers>
+                                        </ControlTemplate>
+                                    </Setter.Value>
+                                </Setter>
+                            </Style>
+                        </ListBox.ItemContainerStyle>
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <Grid Margin="2">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <Border Grid.Column="0" Width="32" Height="32" CornerRadius="16" Background="#334155" Margin="0,0,10,0">
+                                        <TextBlock Text="🔒" HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="14"/>
+                                    </Border>
+                                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                        <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="14" Foreground="#FFFFFF"/>
+                                        <TextBlock Text="{Binding LastUsedText}" FontSize="11" Foreground="#94A3B8"/>
+                                    </StackPanel>
+                                </Grid>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </Grid>
+            </Border>
+
+            <!-- Right: Profile Unlock & Launch Panel -->
+            <Border Grid.Column="1" Padding="32" Background="#0F172A">
+                <Grid x:Name="ProfileDetailsPanel" Visibility="Visible">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <!-- Profile Header Details -->
+                    <StackPanel Grid.Row="0" Margin="0,0,0,24">
+                        <TextBlock x:Name="SelectedProfileName" Text="Select a Profile" FontSize="24" FontWeight="Bold" Foreground="#FFFFFF"/>
+                        <TextBlock x:Name="SelectedProfileStatus" Text="Encrypted AES-256-GCM Vault" FontSize="13" Foreground="#94A3B8" Margin="0,4,0,0"/>
+                    </StackPanel>
+
+                    <!-- Password and Unlock Controls -->
+                    <Border Grid.Row="1" Background="#1E293B" CornerRadius="8" Padding="20" BorderBrush="#334155" BorderThickness="1">
+                        <StackPanel>
+                            <TextBlock Text="Master Password" FontSize="13" FontWeight="Medium" Foreground="#E2E8F0" Margin="0,0,0,6"/>
+
+                            <Grid Margin="0,0,0,12">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+
+                                <PasswordBox x:Name="ProfilePasswordBox" Grid.Column="0" Height="38" Background="#0F172A" Foreground="#FFFFFF" BorderBrush="#475569" BorderThickness="1" Padding="10,6" FontSize="14" KeyDown="OnPasswordKeyDown"/>
+                                <TextBox x:Name="ProfilePasswordTextBox" Grid.Column="0" Height="38" Background="#0F172A" Foreground="#FFFFFF" BorderBrush="#475569" BorderThickness="1" Padding="10,6" FontSize="14" Visibility="Collapsed" KeyDown="OnPasswordKeyDown"/>
+
+                                <Button x:Name="TogglePasswordButton" Grid.Column="1" Content="👁️" Width="40" Height="38" Background="#334155" Foreground="#FFFFFF" BorderThickness="0" Margin="6,0,0,0" Click="OnTogglePasswordVisibility" Cursor="Hand" ToolTip="Show/Hide Password"/>
+                            </Grid>
+
+                            <TextBlock x:Name="StatusMessage" Text="" FontSize="12" Margin="0,0,0,12" Visibility="Collapsed"/>
+
+                            <Button x:Name="UnlockButton" Content="Unlock &amp; Launch Browser" Height="42" Background="#2563EB" Foreground="#FFFFFF" FontWeight="Bold" FontSize="14" BorderThickness="0" Click="OnUnlockAndLaunchClick" Cursor="Hand"/>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Management Actions -->
+                    <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,20,0,0">
+                        <Button x:Name="RenameButton" Content="Rename" Width="85" Height="32" Background="#334155" Foreground="#E2E8F0" BorderThickness="0" Margin="0,0,10,0" Click="OnRenameClick" Cursor="Hand"/>
+                        <Button x:Name="DeleteButton" Content="Delete Profile" Width="105" Height="32" Background="#7F1D1D" Foreground="#FECACA" BorderThickness="0" Click="OnDeleteClick" Cursor="Hand"/>
+                    </StackPanel>
+                </Grid>
+            </Border>
+        </Grid>
+
+        <!-- Bottom Status Bar -->
+        <Border Grid.Row="2" Background="#0F172A" BorderBrush="#1E293B" BorderThickness="0,1,0,0" Padding="16,8">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock x:Name="BrowserPathStatus" Text="Detecting Helium Browser..." FontSize="12" Foreground="#94A3B8"/>
+                </StackPanel>
+
+                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock Text="Local Vaults: Isolated &amp; Secure" FontSize="12" Foreground="#64748B"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+    </Grid>
+</Window>
