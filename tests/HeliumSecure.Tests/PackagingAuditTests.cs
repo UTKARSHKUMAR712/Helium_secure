@@ -26,7 +26,8 @@ public class PackagingAuditTests : IDisposable
         // From tests/HeliumSecure.Tests/bin/Release/net8.0-windows/
         _repoRoot = Path.GetFullPath(Path.Combine(baseDir, "..", "..", "..", "..", ".."));
         _distDir = Path.Combine(_repoRoot, "dist", "HeliumPro");
-        _bundledChromeExe = Path.Combine(_distDir, "browser", "chrome.exe");
+        string candidate = Path.Combine(_distDir, "browser", "chrome.exe");
+        _bundledChromeExe = File.Exists(candidate) ? candidate : (BrowserProcessManager.ResolveHeliumExecutable() ?? "");
     }
 
     public void Dispose()

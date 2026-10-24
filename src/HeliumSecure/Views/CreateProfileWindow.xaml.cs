@@ -12,7 +12,21 @@ public partial class CreateProfileWindow : Window
     {
         InitializeComponent();
         _profileManager = profileManager;
+
+        Loaded += OnLoaded;
         ProfileNameBox.Focus();
+    }
+
+    private void OnLoaded(object sender, RoutedEventArgs e)
+    {
+        double availableHeight = SystemParameters.WorkArea.Height;
+        if (Owner != null && Owner.ActualHeight > 100)
+        {
+            availableHeight = Owner.ActualHeight;
+        }
+
+        // Keep maximum dialog height bounded by available screen or parent window height
+        MaxHeight = Math.Max(260, availableHeight * 0.90);
     }
 
     private void OnCancelClick(object sender, RoutedEventArgs e)
