@@ -47,7 +47,7 @@
                                   Fill="#818CF8" Width="13" Height="13" Stretch="Uniform" Margin="0,0,6,0" VerticalAlignment="Center"/>
                             <TextBlock Text="ZERO-KNOWLEDGE POLICY" FontSize="10" FontWeight="Bold" Foreground="#818CF8"/>
                         </StackPanel>
-                        <TextBlock Text="Helium Pro does not store plaintext passwords or recovery keys. If the password is lost, data is mathematically unrecoverable. 3 failed attempts trigger a 30-min lockout; 5 attempts in Stage 2 permanently destroy the vault." FontSize="11" Foreground="#94A3B8" TextWrapping="Wrap"/>
+                        <TextBlock Text="HeliumSecure does not store plaintext passwords or recovery keys. If the password is lost, data is mathematically unrecoverable. 3 failed attempts trigger a 30-min lockout; 5 attempts in Stage 2 permanently destroy the vault." FontSize="11" Foreground="#94A3B8" TextWrapping="Wrap"/>
                     </StackPanel>
                 </Border>
 

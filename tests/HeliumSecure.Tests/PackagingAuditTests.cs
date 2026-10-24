@@ -25,7 +25,9 @@ public class PackagingAuditTests : IDisposable
         string baseDir = AppContext.BaseDirectory;
         // From tests/HeliumSecure.Tests/bin/Release/net8.0-windows/
         _repoRoot = Path.GetFullPath(Path.Combine(baseDir, "..", "..", "..", "..", ".."));
-        _distDir = Path.Combine(_repoRoot, "dist", "HeliumPro");
+        _distDir = Directory.Exists(Path.Combine(_repoRoot, "dist", "HeliumSecure"))
+            ? Path.Combine(_repoRoot, "dist", "HeliumSecure")
+            : Path.Combine(_repoRoot, "dist", "HeliumPro");
         string candidate = Path.Combine(_distDir, "browser", "chrome.exe");
         _bundledChromeExe = File.Exists(candidate) ? candidate : (BrowserProcessManager.ResolveHeliumExecutable() ?? "");
     }
@@ -48,10 +50,12 @@ public class PackagingAuditTests : IDisposable
         Assert.True(Directory.Exists(_distDir), $"Dist directory not found at {_distDir}");
         Assert.True(File.Exists(Path.Combine(_distDir, "HeliumSecure.exe")));
         Assert.True(File.Exists(Path.Combine(_distDir, "HeliumSecure.Core.dll")));
-        Assert.True(File.Exists(Path.Combine(_distDir, "Install-HeliumPro.ps1")));
+        Assert.True(File.Exists(Path.Combine(_distDir, "Install-HeliumSecure.ps1")) || File.Exists(Path.Combine(_distDir, "Install-HeliumPro.ps1")));
         Assert.True(File.Exists(_bundledChromeExe), $"Bundled chrome.exe not found at {_bundledChromeExe}");
 
-        string zipPath = Path.Combine(_repoRoot, "dist", "HeliumPro_v1.0.0_win-x64.zip");
+        string zipPath = File.Exists(Path.Combine(_repoRoot, "dist", "HeliumSecure_v1.0.0_win-x64.zip"))
+            ? Path.Combine(_repoRoot, "dist", "HeliumSecure_v1.0.0_win-x64.zip")
+            : Path.Combine(_repoRoot, "dist", "HeliumPro_v1.0.0_win-x64.zip");
         Assert.True(File.Exists(zipPath), "Distribution ZIP archive does not exist.");
 
         using var zip = ZipFile.OpenRead(zipPath);

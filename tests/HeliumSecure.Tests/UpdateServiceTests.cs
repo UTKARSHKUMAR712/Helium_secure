@@ -71,7 +71,7 @@ public sealed class UpdateServiceTests
     {
         var fake = new FakeUpdateApiClient
         {
-            LauncherRelease = FakeRelease.Create("v1.1.0", "HeliumPro-win-x64-Setup.exe")
+            LauncherRelease = FakeRelease.Create("v1.1.0", "HeliumSecure-Setup.exe")
         };
         var svc = new UpdateService(fake);
 
@@ -133,6 +133,22 @@ public sealed class UpdateServiceTests
     {
         var missingPath = Path.Combine(Path.GetTempPath(), Guid.NewGuid() + "_missing.exe");
         Assert.Throws<FileNotFoundException>(() => UpdateService.LaunchInstallerAndExit(missingPath));
+    }
+
+    // Test 7 ─ LaunchInstallerAndExit with invalid PE header → InvalidDataException
+    [Fact]
+    public void LaunchInstallerAndExit_WithCorruptedExeHeader_ThrowsInvalidDataException()
+    {
+        var tempFile = Path.Combine(Path.GetTempPath(), Guid.NewGuid() + "_bad.exe");
+        try
+        {
+            File.WriteAllText(tempFile, "NOT_AN_EXECUTABLE_HTML_ERROR_404");
+            Assert.Throws<InvalidDataException>(() => UpdateService.LaunchInstallerAndExit(tempFile));
+        }
+        finally
+        {
+            try { File.Delete(tempFile); } catch { }
+        }
     }
 }
 

@@ -60,7 +60,7 @@ internal sealed class HttpUpdateApiClient : IUpdateApiClient
     private static HttpClient CreateHttpClient()
     {
         var client = new HttpClient();
-        client.DefaultRequestHeaders.UserAgent.ParseAdd("HeliumPro/1.0");
+        client.DefaultRequestHeaders.UserAgent.ParseAdd("HeliumSecure/1.0");
         client.Timeout = TimeSpan.FromSeconds(30);
         return client;
     }
@@ -123,10 +123,10 @@ public sealed class UpdateService
             if (status == UpdateCheckStatus.UpdateAvailable)
             {
                 downloadUrl = release.Assets
-                    .FirstOrDefault(a => a.Name.Contains("-win-x64") && a.Name.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
+                    .FirstOrDefault(a => a.Name.Contains("Setup", StringComparison.OrdinalIgnoreCase) && a.Name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
                     ?.BrowserDownloadUrl
                     ?? release.Assets
-                    .FirstOrDefault(a => a.Name.Contains("Setup") && a.Name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
+                    .FirstOrDefault(a => a.Name.Contains("-win-x64", StringComparison.OrdinalIgnoreCase) && a.Name.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
                     ?.BrowserDownloadUrl;
             }
 
@@ -229,7 +229,7 @@ public sealed class UpdateService
         CancellationToken ct = default)
     {
         using var http = new HttpClient();
-        http.DefaultRequestHeaders.UserAgent.ParseAdd("HeliumPro/1.0");
+        http.DefaultRequestHeaders.UserAgent.ParseAdd("HeliumSecure/1.0");
 
         using var response = await http.GetAsync(downloadUrl, HttpCompletionOption.ResponseHeadersRead, ct)
                                        .ConfigureAwait(false);
@@ -258,10 +258,24 @@ public sealed class UpdateService
             }
         }
 
-        // Validate non-empty
+        // Validate download completeness and integrity
         var fileInfo = new FileInfo(destPath);
         if (fileInfo.Length == 0)
-            throw new InvalidOperationException("Downloaded file is empty.");
+            throw new InvalidOperationException("Downloaded installer file is empty.");
+
+        if (totalBytes > 0 && downloadedBytes != totalBytes)
+            throw new InvalidOperationException($"Incomplete download: received {downloadedBytes} bytes, expected {totalBytes} bytes.");
+
+        // If installer is an executable, verify it possesses a valid PE header (MZ magic bytes)
+        if (destPath.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
+        {
+            using var checkFs = new FileStream(destPath, FileMode.Open, FileAccess.Read, FileShare.Read);
+            if (checkFs.Length < 64)
+                throw new InvalidDataException("Downloaded file is too small to be a valid Windows executable.");
+            var magic = new byte[2];
+            if (checkFs.Read(magic, 0, 2) != 2 || magic[0] != 0x4D || magic[1] != 0x5A) // 'M', 'Z'
+                throw new InvalidDataException("Downloaded file does not contain a valid Windows executable (MZ) header.");
+        }
 
         progress?.Report(100);
         return destPath;
@@ -272,13 +286,24 @@ public sealed class UpdateService
     // -----------------------------------------------------------------------
 
     /// <summary>
-    /// Verifies the installer exists, launches it, then invokes <paramref name="shutdownCallback"/>
+    /// Verifies the installer exists, validates executable integrity, launches it, then invokes <paramref name="shutdownCallback"/>
     /// (pass <c>() => Application.Current.Shutdown()</c> from WPF layer).
     /// </summary>
     public static void LaunchInstallerAndExit(string installerPath, Action? shutdownCallback = null)
     {
         if (!File.Exists(installerPath))
             throw new FileNotFoundException("Installer file not found.", installerPath);
+
+        // Security check: verify valid PE executable header before execution
+        if (installerPath.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
+        {
+            using var fs = new FileStream(installerPath, FileMode.Open, FileAccess.Read, FileShare.Read);
+            if (fs.Length < 64)
+                throw new InvalidDataException("Installer file is too small to be a valid Windows executable.");
+            var magic = new byte[2];
+            if (fs.Read(magic, 0, 2) != 2 || magic[0] != 0x4D || magic[1] != 0x5A) // 'M', 'Z'
+                throw new InvalidDataException("Installer file is corrupt or not a valid Windows executable.");
+        }
 
         System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(installerPath) { UseShellExecute = true });
         shutdownCallback?.Invoke();

@@ -1,12 +1,12 @@
-# Helium Pro Architecture & Lifecycle Specification
+# HeliumSecure Architecture & Lifecycle Specification
 
 ## Overview
 
-Helium Pro provides an authenticated, isolated profile architecture on top of Helium (Chromium).
+HeliumSecure provides an authenticated, isolated profile architecture on top of Helium (Chromium).
 
 ```
                       +-----------------------------+
-                      |   Helium Pro Native Launcher|
+                      |  HeliumSecure Launcher      |
                       |   (WPF / C# .NET 8 x64)     |
                       +--------------+--------------+
                                      |
@@ -76,4 +76,4 @@ Chromium architecture on Windows uses a multi-process model:
 
 A standard `Process.WaitForExit()` only waits on the root process. If the browser exits while helper renderers or utility processes are still committing SQLite database journals or cache to disk, premature directory cleanup could lead to data loss.
 
-Helium Pro assigns the root browser process to a Windows **Job Object** (`kernel32.dll!CreateJobObject` / `AssignProcessToJobObject`). The Job Object automatically tracks all descendant processes. The launcher polls `JOBOBJECT_BASIC_PROCESS_ID_LIST` until the active process count is 0 before initiating vault re-encryption and cleanup.
+HeliumSecure assigns the root browser process to a Windows **Job Object** (`kernel32.dll!CreateJobObject` / `AssignProcessToJobObject`). The Job Object automatically tracks all descendant processes. The launcher polls `JOBOBJECT_BASIC_PROCESS_ID_LIST` until the active process count is 0 before initiating vault re-encryption and cleanup.

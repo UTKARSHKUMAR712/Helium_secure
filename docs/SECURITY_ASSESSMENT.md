@@ -1,4 +1,4 @@
-# Helium Pro Security Assessment & Threat Model
+# HeliumSecure Security Assessment & Threat Model
 
 ## 1. Cryptographic Security & Integrity
 
@@ -25,7 +25,7 @@
 
 ## 3. Threat Model & Security Boundaries
 
-### What Helium Pro Protects Against
+### What HeliumSecure Protects Against
 1. **At-Rest Inspection:** If the laptop is stolen, powered off, or an attacker inspects user disk files, private profiles are protected with AES-256-GCM and cannot be decrypted without the user's password.
 2. **Multi-User Sharing:** Other standard local users on the same Windows machine cannot access or modify the user's vaults or working directory due to NTFS DACLs.
 3. **Data Bleed Across Profiles:** Profile A and Profile B have isolated user-data directories (`--user-data-dir`). Cookies, cache, local storage, extensions, history, and bookmarks are completely separate and mutually inaccessible.
@@ -33,5 +33,5 @@
 
 ### Explicit Limitations & Same-User Boundaries
 1. **Unlocked State Plaintext Working Directory:** Chromium requires a normal filesystem for LevelDB and SQLite databases. While the profile is unlocked, working files reside in `%LOCALAPPDATA%\HeliumSecure\Profiles\<ProfileId>`.
-2. **Malware / Elevated Attackers:** Malware running under the same Windows user context can read memory or inject into running processes. Helium Pro does not claim to defend against active rootkits or malware executing with the user's credentials while the browser is running.
+2. **Malware / Elevated Attackers:** Malware running under the same Windows user context can read memory or inject into running processes. HeliumSecure does not claim to defend against active rootkits or malware executing with the user's credentials while the browser is running.
 3. **Password Recovery:** There is no back-door or recovery key. If a user loses their master password, encrypted data cannot be recovered.

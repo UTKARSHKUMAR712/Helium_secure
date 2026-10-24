@@ -283,7 +283,7 @@ public partial class MainWindow : Window
         {
             if (UpdateCenterPage != null) UpdateCenterPage.Visibility = Visibility.Visible;
             HeaderTitleText.Text = "Update Center";
-            HeaderSubtitleText.Text = "Keep Helium Pro and the browser up to date.";
+            HeaderSubtitleText.Text = "Keep HeliumSecure and the browser up to date.";
         }
     }
 
@@ -531,8 +531,8 @@ public partial class MainWindow : Window
                 "CRITICAL SECURITY ENFORCEMENT\n\n" +
                 $"Profile '{_selectedItem.Name}' exceeded the maximum 5 authentication attempts in Stage 2.\n\n" +
                 "All encrypted vault files, recovery backups, and local session files have been PERMANENTLY AND IRRECOVERABLY DESTROYED.\n\n" +
-                "Helium Pro enforces a strict zero-knowledge security policy. No backdoor, recovery key, or administrative bypass exists.",
-                "Helium Pro — Profile Terminally Destroyed",
+                "HeliumSecure enforces a strict zero-knowledge security policy. No backdoor, recovery key, or administrative bypass exists.",
+                "HeliumSecure — Profile Terminally Destroyed",
                 MessageBoxButton.OK,
                 MessageBoxImage.Stop);
             RefreshProfileList();
@@ -803,7 +803,7 @@ public partial class MainWindow : Window
             switch (_latestLauncherResult.Status)
             {
                 case UpdateCheckStatus.UpToDate:
-                    LauncherUpdateStatus.Text = "✓ Helium Pro is up to date.";
+                    LauncherUpdateStatus.Text = "✓ HeliumSecure is up to date.";
                     LauncherUpdateStatus.Foreground = new SolidColorBrush(Color.FromRgb(52, 211, 153));
                     break;
 
@@ -852,9 +852,9 @@ public partial class MainWindow : Window
 
         try
         {
-            var destDir = Path.Combine(Path.GetTempPath(), "HeliumProUpdate");
+            var destDir = Path.Combine(Path.GetTempPath(), "HeliumSecureUpdate");
             var fileName = Path.GetFileName(new Uri(downloadUrl).LocalPath);
-            if (string.IsNullOrEmpty(fileName)) fileName = "HeliumProSetup.exe";
+            if (string.IsNullOrEmpty(fileName)) fileName = "HeliumSecure-Setup.exe";
             var destPath = Path.Combine(destDir, fileName);
 
             var progress = new Progress<int>(pct =>

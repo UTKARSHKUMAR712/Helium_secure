@@ -1,7 +1,7 @@
 <Window x:Class="HeliumSecure.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Helium Pro — Browser Vault" Height="700" Width="1060"
+        Title="HeliumSecure — Browser Vault" Height="700" Width="1060"
         WindowStartupLocation="CenterScreen"
         Background="#0B0E17" Foreground="#F8FAFC" FontFamily="Segoe UI"
         MinWidth="920" MinHeight="600">
@@ -34,7 +34,7 @@
                             <TextBlock Text="He" FontWeight="Bold" FontSize="18" Foreground="#FFFFFF" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
                         <StackPanel VerticalAlignment="Center">
-                            <TextBlock Text="Helium Pro" FontSize="17" FontWeight="Bold" Foreground="#FFFFFF"/>
+                            <TextBlock Text="HeliumSecure" FontSize="17" FontWeight="Bold" Foreground="#FFFFFF"/>
                             <TextBlock Text="Hardware-Isolated Vaults" FontSize="11" Foreground="#818CF8" Margin="0,1,0,0"/>
                         </StackPanel>
                     </StackPanel>
@@ -787,14 +787,14 @@
                     <Grid Margin="0,0,0,20">
                         <StackPanel>
                             <TextBlock Text="UPDATE CENTER" FontSize="11" FontWeight="Bold" Foreground="#818CF8"/>
-                            <TextBlock Text="Keep Helium Pro and the browser up to date." FontSize="13" Foreground="#94A3B8" Margin="0,4,0,0"/>
+                            <TextBlock Text="Keep HeliumSecure and the browser up to date." FontSize="13" Foreground="#94A3B8" Margin="0,4,0,0"/>
                         </StackPanel>
                     </Grid>
 
                     <!-- ── Section 1: Launcher ── -->
                     <Border Background="#121727" CornerRadius="12" BorderBrush="#1E273D" BorderThickness="1" Padding="22" Margin="0,0,0,18">
                         <StackPanel>
-                            <TextBlock Text="HELIUM PRO LAUNCHER" FontSize="11" FontWeight="Bold" Foreground="#818CF8" Margin="0,0,0,10"/>
+                            <TextBlock Text="HELIUMSECURE LAUNCHER" FontSize="11" FontWeight="Bold" Foreground="#818CF8" Margin="0,0,0,10"/>
 
                             <Grid Margin="0,0,0,10">
                                 <Grid.ColumnDefinitions>
