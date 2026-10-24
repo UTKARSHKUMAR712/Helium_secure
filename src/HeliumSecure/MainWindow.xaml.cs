@@ -16,14 +16,66 @@ using HeliumSecure.Views;
 
 namespace HeliumSecure;
 
-public sealed class ProfileDisplayItem
+public sealed class ProfileDisplayItem : System.ComponentModel.INotifyPropertyChanged
 {
     private readonly ProfileManager _profileManager;
+    private bool _isExpanded;
+    private string _quickErrorMessage = string.Empty;
+
+    public event System.ComponentModel.PropertyChangedEventHandler? PropertyChanged;
 
     public ProfileInfo Profile { get; }
     public Guid Id => Profile.Id;
     public string Name => Profile.Name;
     public string LastUsedText => $"Last used: {Profile.LastUsedAt.ToLocalTime():yyyy-MM-dd HH:mm}";
+
+    public bool IsExpanded
+    {
+        get => _isExpanded;
+        set
+        {
+            if (_isExpanded != value)
+            {
+                _isExpanded = value;
+                OnPropertyChanged(nameof(IsExpanded));
+                OnPropertyChanged(nameof(ExpandedVisibility));
+                OnPropertyChanged(nameof(CollapsedVisibility));
+            }
+        }
+    }
+
+    public Visibility ExpandedVisibility => _isExpanded ? Visibility.Visible : Visibility.Collapsed;
+    public Visibility CollapsedVisibility => _isExpanded ? Visibility.Collapsed : Visibility.Visible;
+
+    public string QuickErrorMessage
+    {
+        get => _quickErrorMessage;
+        set
+        {
+            if (_quickErrorMessage != value)
+            {
+                _quickErrorMessage = value;
+                OnPropertyChanged(nameof(QuickErrorMessage));
+                OnPropertyChanged(nameof(QuickErrorVisibility));
+            }
+        }
+    }
+
+    public Visibility QuickErrorVisibility => string.IsNullOrEmpty(_quickErrorMessage) ? Visibility.Collapsed : Visibility.Visible;
+
+    public void RefreshProperties()
+    {
+        OnPropertyChanged(nameof(StatusBadgeText));
+        OnPropertyChanged(nameof(StatusBadgeBg));
+        OnPropertyChanged(nameof(StatusBadgeBorder));
+        OnPropertyChanged(nameof(StatusBadgeFg));
+        OnPropertyChanged(nameof(LastUsedText));
+    }
+
+    private void OnPropertyChanged(string propertyName)
+    {
+        PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs(propertyName));
+    }
 
     public string Initials
     {
@@ -305,6 +357,205 @@ public partial class MainWindow : Window
             RefreshProfileList(profileId);
             ProfilePasswordBox.Focus();
         }
+    }
+
+    private void OnRecentProfileCardClick(object sender, MouseButtonEventArgs e)
+    {
+        if (e.OriginalSource is DependencyObject source)
+        {
+            if (FindVisualAncestor<Button>(source) != null ||
+                FindVisualAncestor<PasswordBox>(source) != null ||
+                FindVisualAncestor<TextBox>(source) != null)
+            {
+                return;
+            }
+        }
+
+        if (sender is FrameworkElement fe && fe.Tag is ProfileDisplayItem item)
+        {
+            ToggleProfileExpansion(item, fe);
+        }
+    }
+
+    private void OnRecentProfileCardToggleClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement fe && fe.Tag is ProfileDisplayItem item)
+        {
+            var card = FindVisualAncestor<Border>(fe);
+            ToggleProfileExpansion(item, card);
+        }
+    }
+
+    private void ToggleProfileExpansion(ProfileDisplayItem item, FrameworkElement? container)
+    {
+        bool targetState = !item.IsExpanded;
+
+        if (DashRecentVaultsList.ItemsSource is IEnumerable<ProfileDisplayItem> list)
+        {
+            foreach (var other in list)
+            {
+                if (other != item && other.IsExpanded)
+                {
+                    other.IsExpanded = false;
+                    other.QuickErrorMessage = string.Empty;
+                }
+            }
+        }
+
+        item.IsExpanded = targetState;
+        item.QuickErrorMessage = string.Empty;
+
+        if (targetState && container != null)
+        {
+            Dispatcher.InvokeAsync(() =>
+            {
+                var pb = FindVisualChild<PasswordBox>(container);
+                pb?.Focus();
+            }, System.Windows.Threading.DispatcherPriority.Loaded);
+        }
+    }
+
+    private void OnQuickUnlockCancelClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement fe && fe.Tag is ProfileDisplayItem item)
+        {
+            item.IsExpanded = false;
+            item.QuickErrorMessage = string.Empty;
+        }
+    }
+
+    private void OnQuickPasswordKeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Enter && sender is PasswordBox pb)
+        {
+            if (pb.Tag is ProfileDisplayItem item)
+            {
+                _ = ExecuteQuickUnlockAsync(item, pb.Password, pb);
+            }
+        }
+    }
+
+    private void OnQuickUnlockSubmitClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement fe && fe.Tag is ProfileDisplayItem item)
+        {
+            var panel = FindVisualAncestor<Border>(fe) ?? FindVisualAncestor<Grid>(fe) as DependencyObject;
+            var pb = panel != null ? FindVisualChild<PasswordBox>(panel) : null;
+            string password = pb?.Password ?? string.Empty;
+            _ = ExecuteQuickUnlockAsync(item, password, pb);
+        }
+    }
+
+    private async Task ExecuteQuickUnlockAsync(ProfileDisplayItem item, string password, PasswordBox? pb)
+    {
+        if (string.IsNullOrEmpty(password))
+        {
+            item.QuickErrorMessage = "Please enter your vault password.";
+            return;
+        }
+
+        if (_profileManager.IsProfileLocked(item.Id))
+        {
+            item.QuickErrorMessage = "Profile already has an active browser session running.";
+            return;
+        }
+
+        item.QuickErrorMessage = string.Empty;
+        SetBusyState(true, $"Unlocking vault '{item.Name}' with Argon2id & launching Helium...");
+
+        try
+        {
+            var session = await _profileManager.UnlockAndLaunchAsync(
+                item.Id,
+                password,
+                _heliumExecutablePath,
+                onSessionCompleted: () =>
+                {
+                    Dispatcher.Invoke(() =>
+                    {
+                        ShowStatus($"Session for '{item.Name}' closed. Vault re-encrypted.", isError: false);
+                        item.RefreshProperties();
+                        UpdateDetailsView();
+                        UpdateDashboardMetrics();
+                    });
+                });
+
+            item.IsExpanded = false;
+            if (pb != null) pb.Password = string.Empty;
+
+            ShowStatus($"Browser active for '{item.Name}'. Vault will re-encrypt on exit.", isError: false);
+            item.RefreshProperties();
+            UpdateDetailsView();
+            UpdateDashboardMetrics();
+        }
+        catch (ProfileLockedOutException ex)
+        {
+            item.QuickErrorMessage = ex.Message;
+            ShowStatus(ex.Message, isError: true);
+            item.RefreshProperties();
+            UpdateDetailsView();
+        }
+        catch (TerminalDestructionException)
+        {
+            item.IsExpanded = false;
+            MessageBox.Show(
+                "CRITICAL SECURITY ENFORCEMENT\n\n" +
+                $"Profile '{item.Name}' exceeded the maximum 5 authentication attempts in Stage 2.\n\n" +
+                "All encrypted vault files, recovery backups, and local session files have been PERMANENTLY AND IRRECOVERABLY DESTROYED.\n\n" +
+                "HeliumSecure enforces a strict zero-knowledge security policy. No backdoor, recovery key, or administrative bypass exists.",
+                "HeliumSecure — Profile Terminally Destroyed",
+                MessageBoxButton.OK,
+                MessageBoxImage.Stop);
+            RefreshProfileList();
+        }
+        catch (AuthenticationFailedException ex)
+        {
+            item.QuickErrorMessage = ex.Message;
+            ShowStatus(ex.Message, isError: true);
+            item.RefreshProperties();
+            UpdateDetailsView();
+        }
+        catch (CryptographicException)
+        {
+            item.QuickErrorMessage = "Authentication failed: Incorrect password or corrupted vault.";
+            ShowStatus("Authentication failed: Incorrect password or corrupted vault.", isError: true);
+            item.RefreshProperties();
+            UpdateDetailsView();
+        }
+        catch (Exception ex)
+        {
+            item.QuickErrorMessage = $"Unlock error: {ex.Message}";
+            ShowStatus($"Unlock failed: {ex.Message}", isError: true);
+        }
+        finally
+        {
+            SetBusyState(false);
+        }
+    }
+
+    private static T? FindVisualChild<T>(DependencyObject parent) where T : DependencyObject
+    {
+        if (parent == null) return null;
+        int count = VisualTreeHelper.GetChildrenCount(parent);
+        for (int i = 0; i < count; i++)
+        {
+            var child = VisualTreeHelper.GetChild(parent, i);
+            if (child is T typedChild) return typedChild;
+            var result = FindVisualChild<T>(child);
+            if (result != null) return result;
+        }
+        return null;
+    }
+
+    private static T? FindVisualAncestor<T>(DependencyObject current) where T : DependencyObject
+    {
+        var parent = VisualTreeHelper.GetParent(current);
+        while (parent != null)
+        {
+            if (parent is T typed) return typed;
+            parent = VisualTreeHelper.GetParent(parent);
+        }
+        return null;
     }
 
     private void OnLockoutTimerTick(object? sender, EventArgs e)
@@ -771,6 +1022,12 @@ public partial class MainWindow : Window
 
     private async void InitializeUpdateCenterPage()
     {
+        var currentVer = typeof(MainWindow).Assembly.GetName().Version?.ToString(3) ?? "1.0.1";
+        if (LauncherInstalledVersionText != null)
+        {
+            LauncherInstalledVersionText.Text = currentVer;
+        }
+
         // Pre-populate the installed browser version (best effort)
         try
         {
@@ -798,7 +1055,8 @@ public partial class MainWindow : Window
 
         try
         {
-            _latestLauncherResult = await _updateService.CheckLauncherUpdateAsync("1.0.0");
+            var currentVer = typeof(MainWindow).Assembly.GetName().Version?.ToString(3) ?? "1.0.1";
+            _latestLauncherResult = await _updateService.CheckLauncherUpdateAsync(currentVer);
 
             switch (_latestLauncherResult.Status)
             {

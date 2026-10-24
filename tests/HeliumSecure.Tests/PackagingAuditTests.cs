@@ -53,9 +53,10 @@ public class PackagingAuditTests : IDisposable
         Assert.True(File.Exists(Path.Combine(_distDir, "Install-HeliumSecure.ps1")) || File.Exists(Path.Combine(_distDir, "Install-HeliumPro.ps1")));
         Assert.True(File.Exists(_bundledChromeExe), $"Bundled chrome.exe not found at {_bundledChromeExe}");
 
-        string zipPath = File.Exists(Path.Combine(_repoRoot, "dist", "HeliumSecure_v1.0.0_win-x64.zip"))
-            ? Path.Combine(_repoRoot, "dist", "HeliumSecure_v1.0.0_win-x64.zip")
-            : Path.Combine(_repoRoot, "dist", "HeliumPro_v1.0.0_win-x64.zip");
+        string zipPath = Directory.GetFiles(Path.Combine(_repoRoot, "dist"), "HeliumSecure_v*.zip").OrderByDescending(f => f).FirstOrDefault()
+            ?? (File.Exists(Path.Combine(_repoRoot, "dist", "HeliumSecure_v1.0.1_win-x64.zip"))
+                ? Path.Combine(_repoRoot, "dist", "HeliumSecure_v1.0.1_win-x64.zip")
+                : Path.Combine(_repoRoot, "dist", "HeliumSecure_v1.0.0_win-x64.zip"));
         Assert.True(File.Exists(zipPath), "Distribution ZIP archive does not exist.");
 
         using var zip = ZipFile.OpenRead(zipPath);
