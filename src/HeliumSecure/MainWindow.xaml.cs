@@ -4,10 +4,12 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Shapes;
 using HeliumSecure.Core.Guest;
 using HeliumSecure.Core.Models;
 using HeliumSecure.Core.Process;
 using HeliumSecure.Core.Profiles;
+using HeliumSecure.Helpers;
 using HeliumSecure.Views;
 
 namespace HeliumSecure;
@@ -33,9 +35,14 @@ public partial class MainWindow : Window
     private bool _isPasswordRevealed;
     private ProfileDisplayItem? _selectedItem;
 
+    private static readonly Geometry EyeOpenGeometry = Geometry.Parse("M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z");
+    private static readonly Geometry EyeClosedGeometry = Geometry.Parse("M12 7c2.76 0 5 2.24 5 5 0 .65-.13 1.26-.36 1.83l2.92 2.92c1.51-1.26 2.7-2.89 3.44-4.75-1.73-4.39-6-7.5-11-7.5-1.4 0-2.74.25-3.98.7l2.16 2.16C10.74 7.13 11.35 7 12 7zM2 4.27l2.28 2.28.46.46C3.08 8.3 1.78 10.02 1 12c1.73 4.39 6 7.5 11 7.5 1.55 0 3.03-.3 4.38-.84l.42.42L19.73 22 21 20.73 3.27 3 2 4.27zM7.53 9.8l1.55 1.55c-.05.21-.08.43-.08.65 0 1.66 1.34 3 3 3 .22 0 .44-.03.65-.08l1.55 1.55c-.67.33-1.41.53-2.2.53-2.76 0-5-2.24-5-5 0-.79.2-1.53.53-2.2zm4.31-.78l3.15 3.15.02-.16c0-1.66-1.34-3-3-3l-.17.01z");
+
     public MainWindow()
     {
         InitializeComponent();
+
+        WindowThemeHelper.EnableDarkTitleBar(this);
 
         _profileManager = new ProfileManager();
         _guestManager = new GuestSessionManager();
@@ -55,12 +62,12 @@ public partial class MainWindow : Window
         _heliumExecutablePath = BrowserProcessManager.ResolveHeliumExecutable();
         if (!string.IsNullOrEmpty(_heliumExecutablePath) && File.Exists(_heliumExecutablePath))
         {
-            BrowserPathStatus.Text = $"✅ Helium Browser: {_heliumExecutablePath}";
+            BrowserPathStatus.Text = $"Helium Browser: {_heliumExecutablePath}";
             BrowserPathStatus.Foreground = new SolidColorBrush(Color.FromRgb(52, 211, 153)); // Emerald green
         }
         else
         {
-            BrowserPathStatus.Text = "⚠️ Helium executable not detected in default location.";
+            BrowserPathStatus.Text = "Helium executable not detected in default location.";
             BrowserPathStatus.Foreground = new SolidColorBrush(Color.FromRgb(251, 191, 36)); // Amber
         }
     }
@@ -126,17 +133,23 @@ public partial class MainWindow : Window
         bool isLocked = _profileManager.IsProfileLocked(_selectedItem.Id);
         if (isLocked)
         {
-            SelectedProfileStatus.Text = "🔒 Active Session Running";
+            SelectedProfileStatus.Text = "Active Session Running";
             SelectedProfileStatus.Foreground = new SolidColorBrush(Color.FromRgb(251, 191, 36));
+            StatusDot.Fill = new SolidColorBrush(Color.FromRgb(251, 191, 36));
+            StatusBadge.Background = new SolidColorBrush(Color.FromRgb(38, 30, 16));
+            StatusBadge.BorderBrush = new SolidColorBrush(Color.FromRgb(95, 68, 20));
             UnlockButton.IsEnabled = false;
-            UnlockButton.Content = "Profile Active in Browser";
+            UnlockButtonText.Text = "Profile Active in Browser";
         }
         else
         {
-            SelectedProfileStatus.Text = "Encrypted AES-256-GCM Vault";
-            SelectedProfileStatus.Foreground = new SolidColorBrush(Color.FromRgb(148, 163, 184));
+            SelectedProfileStatus.Text = "AES-256-GCM Vault Secured";
+            SelectedProfileStatus.Foreground = new SolidColorBrush(Color.FromRgb(147, 197, 253));
+            StatusDot.Fill = new SolidColorBrush(Color.FromRgb(96, 165, 250));
+            StatusBadge.Background = new SolidColorBrush(Color.FromRgb(22, 32, 53));
+            StatusBadge.BorderBrush = new SolidColorBrush(Color.FromRgb(35, 53, 85));
             UnlockButton.IsEnabled = true;
-            UnlockButton.Content = "Unlock & Launch Browser";
+            UnlockButtonText.Text = "Unlock & Launch Browser";
         }
     }
 
@@ -150,7 +163,7 @@ public partial class MainWindow : Window
             ProfilePasswordTextBox.Visibility = Visibility.Visible;
             ProfilePasswordTextBox.Focus();
             ProfilePasswordTextBox.CaretIndex = ProfilePasswordTextBox.Text.Length;
-            TogglePasswordButton.Content = "🙈";
+            TogglePasswordIcon.Data = EyeClosedGeometry;
         }
         else
         {
@@ -158,7 +171,7 @@ public partial class MainWindow : Window
             ProfilePasswordTextBox.Visibility = Visibility.Collapsed;
             ProfilePasswordBox.Visibility = Visibility.Visible;
             ProfilePasswordBox.Focus();
-            TogglePasswordButton.Content = "👁️";
+            TogglePasswordIcon.Data = EyeOpenGeometry;
         }
     }
 
@@ -186,7 +199,7 @@ public partial class MainWindow : Window
 
         Guid profileId = _selectedItem.Id;
 
-        SetBusyState(true, "Deriving Argon2 key and authenticating vault...");
+        SetBusyState(true, "Deriving Argon2id key and authenticating vault...");
 
         try
         {
@@ -203,7 +216,7 @@ public partial class MainWindow : Window
                     });
                 });
 
-            ShowStatus("Browser running. Vault will re-encrypt on exit.", isError: false);
+            ShowStatus("Browser active. Vault will securely re-encrypt on exit.", isError: false);
             UpdateDetailsView();
         }
         catch (CryptographicException)
@@ -235,16 +248,25 @@ public partial class MainWindow : Window
     private void ShowStatus(string message, bool isError)
     {
         StatusMessage.Text = message;
-        StatusMessage.Foreground = isError
-            ? new SolidColorBrush(Color.FromRgb(248, 113, 113)) // Light red
-            : new SolidColorBrush(Color.FromRgb(52, 211, 153)); // Emerald green
-        StatusMessage.Visibility = Visibility.Visible;
+        if (isError)
+        {
+            StatusMessage.Foreground = new SolidColorBrush(Color.FromRgb(253, 164, 175));
+            StatusMessageContainer.Background = new SolidColorBrush(Color.FromRgb(59, 18, 25));
+            StatusMessageContainer.BorderBrush = new SolidColorBrush(Color.FromRgb(225, 29, 72));
+        }
+        else
+        {
+            StatusMessage.Foreground = new SolidColorBrush(Color.FromRgb(147, 197, 253));
+            StatusMessageContainer.Background = new SolidColorBrush(Color.FromRgb(20, 33, 56));
+            StatusMessageContainer.BorderBrush = new SolidColorBrush(Color.FromRgb(37, 99, 235));
+        }
+        StatusMessageContainer.Visibility = Visibility.Visible;
     }
 
     private void ClearStatus()
     {
         StatusMessage.Text = string.Empty;
-        StatusMessage.Visibility = Visibility.Collapsed;
+        StatusMessageContainer.Visibility = Visibility.Collapsed;
     }
 
     private void OnNewProfileClick(object sender, RoutedEventArgs e)

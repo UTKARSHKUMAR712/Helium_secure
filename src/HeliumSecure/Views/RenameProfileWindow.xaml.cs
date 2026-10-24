@@ -1,5 +1,6 @@
 using System.Windows;
 using HeliumSecure.Core.Profiles;
+using HeliumSecure.Helpers;
 
 namespace HeliumSecure.Views;
 
@@ -13,6 +14,9 @@ public partial class RenameProfileWindow : Window
         InitializeComponent();
         _profileManager = profileManager;
         _profileId = profileId;
+
+        WindowThemeHelper.EnableDarkTitleBar(this);
+
         ProfileNameBox.Text = currentName;
         ProfileNameBox.SelectAll();
         ProfileNameBox.Focus();

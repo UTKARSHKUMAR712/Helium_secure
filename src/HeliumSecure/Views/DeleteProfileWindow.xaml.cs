@@ -1,5 +1,6 @@
 using System.Windows;
 using HeliumSecure.Core.Profiles;
+using HeliumSecure.Helpers;
 
 namespace HeliumSecure.Views;
 
@@ -13,7 +14,10 @@ public partial class DeleteProfileWindow : Window
         InitializeComponent();
         _profileManager = profileManager;
         _profileId = profileId;
-        WarningText.Text = $"Are you sure you want to permanently delete profile '{profileName}'? All encrypted browsing data, cookies, and history will be destroyed.";
+
+        WindowThemeHelper.EnableDarkTitleBar(this);
+
+        WarningText.Text = $"Are you sure you want to permanently delete profile '{profileName}'? All encrypted cookies, history, and vault files will be destroyed.";
         PasswordBox.Focus();
     }
 

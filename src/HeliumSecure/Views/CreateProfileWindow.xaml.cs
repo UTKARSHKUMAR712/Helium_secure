@@ -1,5 +1,6 @@
 using System.Windows;
 using HeliumSecure.Core.Profiles;
+using HeliumSecure.Helpers;
 
 namespace HeliumSecure.Views;
 
@@ -13,6 +14,7 @@ public partial class CreateProfileWindow : Window
         InitializeComponent();
         _profileManager = profileManager;
 
+        WindowThemeHelper.EnableDarkTitleBar(this);
         Loaded += OnLoaded;
         ProfileNameBox.Focus();
     }
@@ -25,8 +27,7 @@ public partial class CreateProfileWindow : Window
             availableHeight = Owner.ActualHeight;
         }
 
-        // Keep maximum dialog height bounded by available screen or parent window height
-        MaxHeight = Math.Max(260, availableHeight * 0.90);
+        MaxHeight = Math.Max(320, availableHeight * 0.90);
     }
 
     private void OnCancelClick(object sender, RoutedEventArgs e)
@@ -75,6 +76,6 @@ public partial class CreateProfileWindow : Window
     private void ShowError(string message)
     {
         ErrorMessage.Text = message;
-        ErrorMessage.Visibility = Visibility.Visible;
+        ErrorContainer.Visibility = Visibility.Visible;
     }
 }
