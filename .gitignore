@@ -3,5 +3,4 @@ obj/
 *.user
 *.suo
 .vs/
-dist/*.zip
-dist/HeliumPro/browser/
+dist/

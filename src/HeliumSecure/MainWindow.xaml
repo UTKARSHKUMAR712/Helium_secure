@@ -152,6 +152,41 @@
                     <!-- Master Password Card -->
                     <Border Grid.Row="1" Background="#101726" CornerRadius="12" Padding="24" BorderBrush="#1F293D" BorderThickness="1">
                         <StackPanel>
+                            <!-- Stage 1 Failed Attempts Notice -->
+                            <Border x:Name="Stage1AttemptsBanner" Background="#152136" BorderBrush="#2563EB" BorderThickness="1" CornerRadius="8" Padding="12,10" Margin="0,0,0,16" Visibility="Collapsed">
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                    <Path Data="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"
+                                          Fill="#60A5FA" Width="16" Height="16" Stretch="Uniform" Margin="0,0,10,0" VerticalAlignment="Center"/>
+                                    <TextBlock x:Name="Stage1AttemptsText" Text="2 attempts remaining before a 30-minute lockout." FontSize="12" Foreground="#93C5FD" FontWeight="SemiBold" TextWrapping="Wrap"/>
+                                </StackPanel>
+                            </Border>
+
+                            <!-- Lockout Countdown Banner -->
+                            <Border x:Name="LockoutBanner" Background="#2B1218" BorderBrush="#E11D48" BorderThickness="1" CornerRadius="8" Padding="14,12" Margin="0,0,0,16" Visibility="Collapsed">
+                                <StackPanel>
+                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,0,4">
+                                        <Path Data="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"
+                                              Fill="#FB7185" Width="14" Height="14" Stretch="Uniform" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                                        <TextBlock Text="PROFILE TEMPORARILY LOCKED OUT" FontSize="11" FontWeight="Bold" Foreground="#FDA4AF"/>
+                                    </StackPanel>
+                                    <TextBlock x:Name="LockoutCountdownText" Text="30m 00s remaining" FontSize="18" FontWeight="Bold" Foreground="#FFFFFF" Margin="0,2,0,4"/>
+                                    <TextBlock Text="3 failed attempts reached. Passwords cannot be recovered or reset. Authentication is suspended until the timer elapses." FontSize="11" Foreground="#F43F5E" TextWrapping="Wrap"/>
+                                </StackPanel>
+                            </Border>
+
+                            <!-- Stage 2 Critical Warning Banner -->
+                            <Border x:Name="Stage2Banner" Background="#2B1808" BorderBrush="#D97706" BorderThickness="1" CornerRadius="8" Padding="14,12" Margin="0,0,0,16" Visibility="Collapsed">
+                                <StackPanel>
+                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,0,4">
+                                        <Path Data="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"
+                                              Fill="#F59E0B" Width="14" Height="14" Stretch="Uniform" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                                        <TextBlock Text="STAGE 2 — CRITICAL SECURITY ENFORCEMENT" FontSize="11" FontWeight="Bold" Foreground="#FDE68A"/>
+                                    </StackPanel>
+                                    <TextBlock x:Name="Stage2AttemptsText" Text="5 attempt(s) remaining before PERMANENT DELETION" FontSize="14" FontWeight="Bold" Foreground="#FBBF24" Margin="0,2,0,4"/>
+                                    <TextBlock Text="WARNING: If these 5 attempts fail, this profile, its encrypted vault, backups, and local session files will be permanently destroyed with no possibility of recovery." FontSize="11" Foreground="#F59E0B" TextWrapping="Wrap"/>
+                                </StackPanel>
+                            </Border>
+
                             <TextBlock Text="MASTER PASSWORD" FontSize="11" FontWeight="Bold" Foreground="#818EA3" Margin="2,0,0,8"/>
 
                             <Grid Margin="0,0,0,16">

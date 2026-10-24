@@ -10,6 +10,7 @@ namespace HeliumSecure.Views;
 public sealed class ProfileStorageDisplayItem
 {
     public ProfileStorageModel Model { get; }
+    public ProfileManager ProfileManager { get; }
 
     public Guid ProfileId => Model.ProfileId;
     public string Name => Model.Name;
@@ -23,23 +24,65 @@ public sealed class ProfileStorageDisplayItem
     public string CreatedAtFormatted => Model.CreatedAtFormatted;
     public string LastUsedFormatted => Model.LastUsedFormatted;
 
-    public string StatusText => IsLocked ? "Active Session" : "Secured at Rest";
+    public bool IsLockedOut => ProfileManager.IsProfileLockedOut(ProfileId, out _, out _);
+    public bool InSecondStage
+    {
+        get
+        {
+            ProfileManager.IsProfileLockedOut(ProfileId, out _, out bool stage2);
+            return stage2;
+        }
+    }
 
-    public Brush StatusBgBrush => IsLocked
-        ? new SolidColorBrush(Color.FromRgb(38, 30, 16))
-        : new SolidColorBrush(Color.FromRgb(22, 32, 53));
+    public string StatusText
+    {
+        get
+        {
+            if (IsLocked) return "Active Session";
+            if (ProfileManager.IsProfileLockedOut(ProfileId, out var rem, out _))
+                return $"Locked Out ({(int)rem.TotalMinutes}m left)";
+            if (InSecondStage) return "Stage 2 Active";
+            return "Secured at Rest";
+        }
+    }
 
-    public Brush StatusBorderBrush => IsLocked
-        ? new SolidColorBrush(Color.FromRgb(95, 68, 20))
-        : new SolidColorBrush(Color.FromRgb(35, 53, 85));
+    public Brush StatusBgBrush
+    {
+        get
+        {
+            if (IsLocked) return new SolidColorBrush(Color.FromRgb(38, 30, 16));
+            if (IsLockedOut) return new SolidColorBrush(Color.FromRgb(43, 18, 24));
+            if (InSecondStage) return new SolidColorBrush(Color.FromRgb(43, 24, 8));
+            return new SolidColorBrush(Color.FromRgb(22, 32, 53));
+        }
+    }
 
-    public Brush StatusFgBrush => IsLocked
-        ? new SolidColorBrush(Color.FromRgb(251, 191, 36))
-        : new SolidColorBrush(Color.FromRgb(147, 197, 253));
+    public Brush StatusBorderBrush
+    {
+        get
+        {
+            if (IsLocked) return new SolidColorBrush(Color.FromRgb(95, 68, 20));
+            if (IsLockedOut) return new SolidColorBrush(Color.FromRgb(225, 29, 72));
+            if (InSecondStage) return new SolidColorBrush(Color.FromRgb(217, 119, 6));
+            return new SolidColorBrush(Color.FromRgb(35, 53, 85));
+        }
+    }
 
-    public ProfileStorageDisplayItem(ProfileStorageModel model)
+    public Brush StatusFgBrush
+    {
+        get
+        {
+            if (IsLocked) return new SolidColorBrush(Color.FromRgb(251, 191, 36));
+            if (IsLockedOut) return new SolidColorBrush(Color.FromRgb(251, 113, 133));
+            if (InSecondStage) return new SolidColorBrush(Color.FromRgb(251, 191, 36));
+            return new SolidColorBrush(Color.FromRgb(147, 197, 253));
+        }
+    }
+
+    public ProfileStorageDisplayItem(ProfileStorageModel model, ProfileManager pm)
     {
         Model = model;
+        ProfileManager = pm;
     }
 }
 
@@ -94,7 +137,7 @@ public partial class SettingsWindow : Window
                     try
                     {
                         var details = StorageService.GetProfileStorageDetails(_profileManager, p.Id);
-                        list.Add(new ProfileStorageDisplayItem(details));
+                        list.Add(new ProfileStorageDisplayItem(details, _profileManager));
                     }
                     catch { }
                 }

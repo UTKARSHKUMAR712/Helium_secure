@@ -200,6 +200,120 @@ public sealed class VaultManager
     }
 
     /// <summary>
+    /// Verifies the password against the vault (or .bak fallback) without extracting files to disk.
+    /// Memory buffers are wiped immediately upon verification.
+    /// </summary>
+    public static bool VerifyPassword(string vaultPath, Guid profileId, string password)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(vaultPath);
+        ArgumentException.ThrowIfNullOrWhiteSpace(password);
+
+        string bakPath = vaultPath + ".bak";
+
+        if (File.Exists(vaultPath))
+        {
+            try
+            {
+                return VerifyPasswordAgainstFile(vaultPath, profileId, password);
+            }
+            catch (CryptographicException)
+            {
+                // If primary failed tag verification, check if .bak exists and succeeds (e.g. primary was corrupt)
+                if (File.Exists(bakPath))
+                {
+                    try
+                    {
+                        return VerifyPasswordAgainstFile(bakPath, profileId, password);
+                    }
+                    catch
+                    {
+                        return false;
+                    }
+                }
+                return false;
+            }
+            catch (Exception ex) when (ex is InvalidDataException or EndOfStreamException or IOException)
+            {
+                if (File.Exists(bakPath))
+                {
+                    try
+                    {
+                        return VerifyPasswordAgainstFile(bakPath, profileId, password);
+                    }
+                    catch
+                    {
+                        return false;
+                    }
+                }
+                return false;
+            }
+        }
+        else if (File.Exists(bakPath))
+        {
+            try
+            {
+                return VerifyPasswordAgainstFile(bakPath, profileId, password);
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool VerifyPasswordAgainstFile(string filePath, Guid profileId, string password)
+    {
+        if (!File.Exists(filePath)) return false;
+
+        VaultFileHeader header;
+        byte[] ciphertext;
+
+        using (var fs = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read))
+        using (var reader = new BinaryReader(fs))
+        {
+            header = VaultFileHeader.ReadFrom(reader);
+            ciphertext = reader.ReadBytes((int)header.CiphertextLength);
+            if (ciphertext.Length != header.CiphertextLength)
+            {
+                throw new InvalidDataException("Vault file ended unexpectedly.");
+            }
+        }
+
+        var config = new VaultCryptoConfig(
+            SaltSizeBytes: header.Salt.Length,
+            Iterations: header.Iterations,
+            MemorySizeKb: header.MemorySizeKb,
+            DegreeOfParallelism: header.DegreeOfParallelism,
+            KeySizeBytes: 32,
+            NonceSizeBytes: header.Nonce.Length,
+            TagSizeBytes: header.Tag.Length
+        );
+
+        byte[] key = Argon2Helper.DeriveKey(password, header.Salt, config);
+        byte[]? plaintext = null;
+
+        try
+        {
+            plaintext = AesGcmVaultCrypto.Decrypt(
+                ciphertext,
+                key,
+                header.Nonce,
+                header.Tag,
+                GetAad(profileId)
+            );
+            return plaintext != null;
+        }
+        finally
+        {
+            AesGcmVaultCrypto.Wipe(key);
+            AesGcmVaultCrypto.Wipe(plaintext);
+            AesGcmVaultCrypto.Wipe(ciphertext);
+        }
+    }
+
+    /// <summary>
     /// Archives and encrypts the working directory into the vault using atomic swap and safe recovery.
     /// Cleans up the working directory afterwards.
     /// </summary>

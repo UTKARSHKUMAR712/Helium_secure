@@ -16,6 +16,24 @@ public sealed class ProfileInfo
     [JsonPropertyName("lastUsedAt")]
     public DateTimeOffset LastUsedAt { get; set; }
 
+    [JsonPropertyName("failedAttempts")]
+    public int FailedAttempts { get; set; } = 0;
+
+    [JsonPropertyName("lockoutUntil")]
+    public DateTimeOffset? LockoutUntil { get; set; }
+
+    [JsonPropertyName("secondStageActive")]
+    public bool SecondStageActive { get; set; } = false;
+
+    [JsonPropertyName("secondStageFailedAttempts")]
+    public int SecondStageFailedAttempts { get; set; } = 0;
+
+    [JsonPropertyName("lastAttemptAt")]
+    public DateTimeOffset? LastAttemptAt { get; set; }
+
+    [JsonPropertyName("isTerminallyDestroyed")]
+    public bool IsTerminallyDestroyed { get; set; } = false;
+
     [JsonIgnore]
     public bool IsActiveSession { get; set; }
 

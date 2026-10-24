@@ -31,6 +31,7 @@ public partial class MainWindow : Window
 {
     private readonly ProfileManager _profileManager;
     private readonly GuestSessionManager _guestManager;
+    private readonly System.Windows.Threading.DispatcherTimer _lockoutCountdownTimer;
     private string? _heliumExecutablePath;
     private bool _isPasswordRevealed;
     private ProfileDisplayItem? _selectedItem;
@@ -47,6 +48,12 @@ public partial class MainWindow : Window
         _profileManager = new ProfileManager();
         _guestManager = new GuestSessionManager();
 
+        _lockoutCountdownTimer = new System.Windows.Threading.DispatcherTimer
+        {
+            Interval = TimeSpan.FromSeconds(1)
+        };
+        _lockoutCountdownTimer.Tick += OnLockoutTimerTick;
+
         DetectHeliumExecutable();
         RefreshProfileList();
 
@@ -54,6 +61,25 @@ public partial class MainWindow : Window
         if (_profileManager.ListProfiles().Count == 0)
         {
             Dispatcher.InvokeAsync(PromptCreateFirstProfile);
+        }
+    }
+
+    private void OnLockoutTimerTick(object? sender, EventArgs e)
+    {
+        if (_selectedItem == null)
+        {
+            _lockoutCountdownTimer.Stop();
+            return;
+        }
+
+        if (_profileManager.IsProfileLockedOut(_selectedItem.Id, out var remaining, out var inSecondStage))
+        {
+            LockoutCountdownText.Text = $"{(int)remaining.TotalMinutes}m {remaining.Seconds:D2}s remaining";
+        }
+        else
+        {
+            _lockoutCountdownTimer.Stop();
+            UpdateDetailsView();
         }
     }
 
@@ -123,6 +149,7 @@ public partial class MainWindow : Window
 
         if (_selectedItem == null)
         {
+            _lockoutCountdownTimer.Stop();
             ProfileDetailsPanel.Visibility = Visibility.Collapsed;
             return;
         }
@@ -133,21 +160,96 @@ public partial class MainWindow : Window
         bool isLocked = _profileManager.IsProfileLocked(_selectedItem.Id);
         if (isLocked)
         {
+            _lockoutCountdownTimer.Stop();
             SelectedProfileStatus.Text = "Active Session Running";
             SelectedProfileStatus.Foreground = new SolidColorBrush(Color.FromRgb(251, 191, 36));
             StatusDot.Fill = new SolidColorBrush(Color.FromRgb(251, 191, 36));
             StatusBadge.Background = new SolidColorBrush(Color.FromRgb(38, 30, 16));
             StatusBadge.BorderBrush = new SolidColorBrush(Color.FromRgb(95, 68, 20));
+
+            LockoutBanner.Visibility = Visibility.Collapsed;
+            Stage2Banner.Visibility = Visibility.Collapsed;
+            Stage1AttemptsBanner.Visibility = Visibility.Collapsed;
+
+            ProfilePasswordBox.IsEnabled = false;
+            ProfilePasswordTextBox.IsEnabled = false;
+            TogglePasswordButton.IsEnabled = false;
             UnlockButton.IsEnabled = false;
             UnlockButtonText.Text = "Profile Active in Browser";
+            return;
+        }
+
+        bool isLockedOut = _profileManager.IsProfileLockedOut(_selectedItem.Id, out var remainingLockout, out var inSecondStage);
+        if (isLockedOut)
+        {
+            SelectedProfileStatus.Text = "Temporarily Locked Out (30m)";
+            SelectedProfileStatus.Foreground = new SolidColorBrush(Color.FromRgb(251, 113, 133));
+            StatusDot.Fill = new SolidColorBrush(Color.FromRgb(244, 63, 94));
+            StatusBadge.Background = new SolidColorBrush(Color.FromRgb(43, 18, 24));
+            StatusBadge.BorderBrush = new SolidColorBrush(Color.FromRgb(225, 29, 72));
+
+            LockoutBanner.Visibility = Visibility.Visible;
+            LockoutCountdownText.Text = $"{(int)remainingLockout.TotalMinutes}m {remainingLockout.Seconds:D2}s remaining";
+            Stage2Banner.Visibility = Visibility.Collapsed;
+            Stage1AttemptsBanner.Visibility = Visibility.Collapsed;
+
+            ProfilePasswordBox.IsEnabled = false;
+            ProfilePasswordTextBox.IsEnabled = false;
+            TogglePasswordButton.IsEnabled = false;
+            UnlockButton.IsEnabled = false;
+            UnlockButtonText.Text = "Locked Out (Countdown Active)";
+
+            _lockoutCountdownTimer.Start();
+        }
+        else if (inSecondStage)
+        {
+            _lockoutCountdownTimer.Stop();
+            int remainingAttempts = _profileManager.GetRemainingAttempts(_selectedItem.Id, out _);
+
+            SelectedProfileStatus.Text = $"Stage 2 Security: {remainingAttempts} Attempts Left";
+            SelectedProfileStatus.Foreground = new SolidColorBrush(Color.FromRgb(251, 191, 36));
+            StatusDot.Fill = new SolidColorBrush(Color.FromRgb(245, 158, 11));
+            StatusBadge.Background = new SolidColorBrush(Color.FromRgb(43, 24, 8));
+            StatusBadge.BorderBrush = new SolidColorBrush(Color.FromRgb(217, 119, 6));
+
+            LockoutBanner.Visibility = Visibility.Collapsed;
+            Stage2Banner.Visibility = Visibility.Visible;
+            Stage2AttemptsText.Text = $"{remainingAttempts} attempt(s) remaining before PERMANENT DELETION";
+            Stage1AttemptsBanner.Visibility = Visibility.Collapsed;
+
+            ProfilePasswordBox.IsEnabled = true;
+            ProfilePasswordTextBox.IsEnabled = true;
+            TogglePasswordButton.IsEnabled = true;
+            UnlockButton.IsEnabled = true;
+            UnlockButtonText.Text = $"Unlock Profile ({remainingAttempts} Left)";
         }
         else
         {
+            _lockoutCountdownTimer.Stop();
+            int remainingAttempts = _profileManager.GetRemainingAttempts(_selectedItem.Id, out _);
+
             SelectedProfileStatus.Text = "AES-256-GCM Vault Secured";
             SelectedProfileStatus.Foreground = new SolidColorBrush(Color.FromRgb(147, 197, 253));
             StatusDot.Fill = new SolidColorBrush(Color.FromRgb(96, 165, 250));
             StatusBadge.Background = new SolidColorBrush(Color.FromRgb(22, 32, 53));
             StatusBadge.BorderBrush = new SolidColorBrush(Color.FromRgb(35, 53, 85));
+
+            LockoutBanner.Visibility = Visibility.Collapsed;
+            Stage2Banner.Visibility = Visibility.Collapsed;
+
+            if (remainingAttempts < 3)
+            {
+                Stage1AttemptsBanner.Visibility = Visibility.Visible;
+                Stage1AttemptsText.Text = $"{remainingAttempts} attempt(s) remaining before a 30-minute lockout.";
+            }
+            else
+            {
+                Stage1AttemptsBanner.Visibility = Visibility.Collapsed;
+            }
+
+            ProfilePasswordBox.IsEnabled = true;
+            ProfilePasswordTextBox.IsEnabled = true;
+            TogglePasswordButton.IsEnabled = true;
             UnlockButton.IsEnabled = true;
             UnlockButtonText.Text = "Unlock & Launch Browser";
         }
@@ -219,20 +321,48 @@ public partial class MainWindow : Window
             ShowStatus("Browser active. Vault will securely re-encrypt on exit.", isError: false);
             UpdateDetailsView();
         }
+        catch (ProfileLockedOutException ex)
+        {
+            ShowStatus(ex.Message, isError: true);
+            SetBusyState(false);
+            UpdateDetailsView();
+        }
+        catch (TerminalDestructionException)
+        {
+            SetBusyState(false);
+            MessageBox.Show(
+                "CRITICAL SECURITY ENFORCEMENT\n\n" +
+                $"Profile '{_selectedItem.Name}' exceeded the maximum 5 authentication attempts in Stage 2.\n\n" +
+                "All encrypted vault files, recovery backups, and local session files have been PERMANENTLY AND IRRECOVERABLY DESTROYED.\n\n" +
+                "Helium Pro enforces a strict zero-knowledge security policy. No backdoor, recovery key, or administrative bypass exists.",
+                "Helium Pro — Profile Terminally Destroyed",
+                MessageBoxButton.OK,
+                MessageBoxImage.Stop);
+            RefreshProfileList();
+        }
+        catch (AuthenticationFailedException ex)
+        {
+            ShowStatus(ex.Message, isError: true);
+            SetBusyState(false);
+            UpdateDetailsView();
+        }
         catch (CryptographicException)
         {
             ShowStatus("Authentication failed: Incorrect password or corrupted vault.", isError: true);
             SetBusyState(false);
+            UpdateDetailsView();
         }
         catch (ProfileAlreadyLockedException ex)
         {
             ShowStatus(ex.Message, isError: true);
             SetBusyState(false);
+            UpdateDetailsView();
         }
         catch (Exception ex)
         {
             ShowStatus($"Error launching profile: {ex.Message}", isError: true);
             SetBusyState(false);
+            UpdateDetailsView();
         }
     }
 

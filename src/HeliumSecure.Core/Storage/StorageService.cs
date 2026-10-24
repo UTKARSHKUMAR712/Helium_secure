@@ -245,6 +245,25 @@ public static class StorageService
             throw new ProfileAlreadyLockedException("Cannot clear storage while the browser session is active. Please close Helium first.");
         }
 
+        if (pm.IsProfileLockedOut(profileId, out var remainingLockout, out var inSecondStage))
+        {
+            throw new ProfileLockedOutException(remainingLockout, inSecondStage);
+        }
+
+        var auth = pm.ValidatePasswordAttempt(profileId, password);
+        if (auth.Status == AuthenticationStatus.LockedOut)
+        {
+            throw new ProfileLockedOutException(auth.RemainingLockout ?? TimeSpan.FromMinutes(30), auth.InSecondStage);
+        }
+        if (auth.Status == AuthenticationStatus.TerminalDestruction)
+        {
+            throw new TerminalDestructionException(profileId);
+        }
+        if (auth.Status == AuthenticationStatus.InvalidPassword)
+        {
+            throw new AuthenticationFailedException(auth.Message ?? "Invalid password.", auth.RemainingAttempts, auth.InSecondStage);
+        }
+
         string vaultPath = pm.GetVaultPath(profileId);
         if (!File.Exists(vaultPath))
         {
