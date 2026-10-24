@@ -4,7 +4,7 @@
         Title="HeliumSecure — Storage Management" Height="680" Width="960"
         Icon="pack://application:,,,/HeliumSecure;component/Assets/app.ico"
         WindowStartupLocation="CenterOwner"
-        Background="#0B0F19" Foreground="#F8FAFC" FontFamily="Segoe UI"
+        Background="#080C16" Foreground="#F8FAFC" FontFamily="Segoe UI Variable Text, Segoe UI, Arial"
         MinWidth="860" MinHeight="560">
     <Grid>
         <Grid.RowDefinitions>

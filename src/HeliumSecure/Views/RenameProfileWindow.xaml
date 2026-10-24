@@ -4,7 +4,7 @@
         Title="Rename Vault" Height="270" Width="450"
         Icon="pack://application:,,,/HeliumSecure;component/Assets/app.ico"
         WindowStartupLocation="CenterOwner" ResizeMode="NoResize"
-        Background="#0B0E17" Foreground="#F8FAFC" FontFamily="Segoe UI"
+        Background="#080C16" Foreground="#F8FAFC" FontFamily="Segoe UI Variable Text, Segoe UI, Arial"
         WindowStyle="SingleBorderWindow">
     <Grid Margin="28,24,28,20">
         <Grid.RowDefinitions>

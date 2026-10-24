@@ -66,6 +66,19 @@ if (-not (Test-Path "$StagingDir\browser\chrome.exe")) {
     Write-Host "Bundled browser files already present in $StagingDir\browser."
 }
 
+# Storage Optimization: Purge redundant files and debug symbols to reduce installation footprint
+Write-Host "Optimizing payload storage size (purging symbols and redundant setup artifacts)..."
+Get-ChildItem -Path $StagingDir -Include *.pdb, *.xml -Recurse -File | ForEach-Object {
+    Remove-Item -Force $_.FullName -ErrorAction SilentlyContinue
+}
+Get-ChildItem -Path "$StagingDir\browser" -Directory -Filter "Installer" -Recurse | ForEach-Object {
+    Write-Host "Removing redundant upstream installer folder: $($_.FullName)"
+    Remove-Item -Recurse -Force $_.FullName -ErrorAction SilentlyContinue
+}
+
+$UncompressedSizeMB = [math]::Round(((Get-ChildItem -Path $StagingDir -Recurse -File | Measure-Object -Property Length -Sum).Sum / 1MB), 2)
+Write-Host "Optimized uncompressed payload footprint: $UncompressedSizeMB MB" -ForegroundColor Green
+
 # Copy Installer Script to package
 $InstallerScriptSource = "$RepoRoot\build\Install-HeliumSecure.ps1"
 if (Test-Path $InstallerScriptSource) {

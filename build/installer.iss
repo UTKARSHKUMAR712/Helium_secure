@@ -31,8 +31,10 @@ PrivilegesRequiredOverridesAllowed=dialog
 OutputDir=..\dist
 OutputBaseFilename=HeliumSecure-Setup
 SetupIconFile=..\src\HeliumSecure\Assets\app.ico
-Compression=lzma2/max
+Compression=lzma2/ultra64
 SolidCompression=yes
+LZMAUseSeparateProcess=yes
+LZMANumBlockThreads=4
 
 ; Architecture: 64-bit Windows
 ArchitecturesAllowed=x64compatible

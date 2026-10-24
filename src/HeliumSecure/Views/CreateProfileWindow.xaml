@@ -6,7 +6,7 @@
         Width="480" MinWidth="420" MaxWidth="540"
         Height="540" MinHeight="360"
         WindowStartupLocation="CenterOwner"
-        Background="#0B0E17" Foreground="#F8FAFC" FontFamily="Segoe UI"
+        Background="#080C16" Foreground="#F8FAFC" FontFamily="Segoe UI Variable Text, Segoe UI, Arial"
         WindowStyle="SingleBorderWindow">
     <Grid Margin="28,24,28,20">
         <Grid.RowDefinitions>
