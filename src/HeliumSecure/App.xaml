@@ -4,26 +4,58 @@
              xmlns:local="clr-namespace:HeliumSecure"
              StartupUri="MainWindow.xaml">
     <Application.Resources>
-        <!-- Color Palette -->
-        <Color x:Key="BgColor">#090D16</Color>
-        <Color x:Key="SurfaceColor">#111827</Color>
-        <Color x:Key="CardColor">#151E30</Color>
-        <Color x:Key="BorderColor">#1F293D</Color>
-        <Color x:Key="AccentColor">#2563EB</Color>
-        <Color x:Key="AccentHoverColor">#3B82F6</Color>
+        <!-- Color Palette: Electric Indigo + Midnight Charcoal -->
+        <Color x:Key="BgColor">#0B0E17</Color>
+        <Color x:Key="SidebarColor">#0F1320</Color>
+        <Color x:Key="SurfaceColor">#121726</Color>
+        <Color x:Key="CardColor">#151C2C</Color>
+        <Color x:Key="CardHoverColor">#1C253B</Color>
+        <Color x:Key="BorderColor">#1E273D</Color>
+        <Color x:Key="BorderHighlightColor">#2E3C5C</Color>
+        
+        <Color x:Key="AccentColor">#6366F1</Color>
+        <Color x:Key="AccentHoverColor">#818CF8</Color>
+        <Color x:Key="AccentDarkColor">#4F46E5</Color>
+        
+        <Color x:Key="SuccessColor">#10B981</Color>
+        <Color x:Key="WarningColor">#F59E0B</Color>
+        <Color x:Key="DangerColor">#F43F5E</Color>
+        
         <Color x:Key="TextPrimaryColor">#F8FAFC</Color>
         <Color x:Key="TextSecondaryColor">#94A3B8</Color>
         <Color x:Key="TextMutedColor">#64748B</Color>
 
+        <!-- Solid Brushes -->
         <SolidColorBrush x:Key="BgBrush" Color="{StaticResource BgColor}"/>
+        <SolidColorBrush x:Key="SidebarBrush" Color="{StaticResource SidebarColor}"/>
         <SolidColorBrush x:Key="SurfaceBrush" Color="{StaticResource SurfaceColor}"/>
         <SolidColorBrush x:Key="CardBrush" Color="{StaticResource CardColor}"/>
+        <SolidColorBrush x:Key="CardHoverBrush" Color="{StaticResource CardHoverColor}"/>
         <SolidColorBrush x:Key="BorderBrush" Color="{StaticResource BorderColor}"/>
+        <SolidColorBrush x:Key="BorderHighlightBrush" Color="{StaticResource BorderHighlightColor}"/>
+        
         <SolidColorBrush x:Key="AccentBrush" Color="{StaticResource AccentColor}"/>
         <SolidColorBrush x:Key="AccentHoverBrush" Color="{StaticResource AccentHoverColor}"/>
+        <SolidColorBrush x:Key="AccentDarkBrush" Color="{StaticResource AccentDarkColor}"/>
+        
+        <SolidColorBrush x:Key="SuccessBrush" Color="{StaticResource SuccessColor}"/>
+        <SolidColorBrush x:Key="WarningBrush" Color="{StaticResource WarningColor}"/>
+        <SolidColorBrush x:Key="DangerBrush" Color="{StaticResource DangerColor}"/>
+        
         <SolidColorBrush x:Key="TextPrimaryBrush" Color="{StaticResource TextPrimaryColor}"/>
         <SolidColorBrush x:Key="TextSecondaryBrush" Color="{StaticResource TextSecondaryColor}"/>
         <SolidColorBrush x:Key="TextMutedBrush" Color="{StaticResource TextMutedColor}"/>
+
+        <!-- Linear Gradient Brushes -->
+        <LinearGradientBrush x:Key="AccentGradient" StartPoint="0,0" EndPoint="1,1">
+            <GradientStop Color="#6366F1" Offset="0.0"/>
+            <GradientStop Color="#4F46E5" Offset="1.0"/>
+        </LinearGradientBrush>
+
+        <LinearGradientBrush x:Key="BrandBadgeGradient" StartPoint="0,0" EndPoint="1,1">
+            <GradientStop Color="#7C3AED" Offset="0.0"/>
+            <GradientStop Color="#4F46E5" Offset="1.0"/>
+        </LinearGradientBrush>
 
         <!-- Ultra-Thin Modern ScrollBar Thumb Style -->
         <Style x:Key="ModernScrollBarThumb" TargetType="{x:Type Thumb}">
@@ -33,18 +65,18 @@
                 <Setter.Value>
                     <ControlTemplate TargetType="{x:Type Thumb}">
                         <Border x:Name="ThumbBorder"
-                                Background="#3F3F46"
+                                Background="#334155"
                                 CornerRadius="2.5"
                                 HorizontalAlignment="Center"
                                 Width="5"
                                 Margin="0,2,0,2"/>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="ThumbBorder" Property="Background" Value="#71717A"/>
+                                <Setter TargetName="ThumbBorder" Property="Background" Value="#64748B"/>
                                 <Setter TargetName="ThumbBorder" Property="Width" Value="6"/>
                             </Trigger>
                             <Trigger Property="IsDragging" Value="True">
-                                <Setter TargetName="ThumbBorder" Property="Background" Value="#A1A1AA"/>
+                                <Setter TargetName="ThumbBorder" Property="Background" Value="#94A3B8"/>
                                 <Setter TargetName="ThumbBorder" Property="Width" Value="6"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
@@ -106,14 +138,14 @@
 
         <!-- Premium Rounded TextBox Style -->
         <Style TargetType="{x:Type TextBox}">
-            <Setter Property="Background" Value="#121826"/>
+            <Setter Property="Background" Value="#101524"/>
             <Setter Property="Foreground" Value="#F8FAFC"/>
-            <Setter Property="BorderBrush" Value="#222F44"/>
+            <Setter Property="BorderBrush" Value="#1E273D"/>
             <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="Padding" Value="12,8"/>
-            <Setter Property="FontSize" Value="14"/>
-            <Setter Property="CaretBrush" Value="#60A5FA"/>
-            <Setter Property="SelectionBrush" Value="#2563EB"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="CaretBrush" Value="#818CF8"/>
+            <Setter Property="SelectionBrush" Value="#6366F1"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="{x:Type TextBox}">
@@ -127,11 +159,11 @@
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="border" Property="BorderBrush" Value="#3B82F6"/>
+                                <Setter TargetName="border" Property="BorderBrush" Value="#38496E"/>
                             </Trigger>
                             <Trigger Property="IsKeyboardFocused" Value="True">
-                                <Setter TargetName="border" Property="BorderBrush" Value="#3B82F6"/>
-                                <Setter TargetName="border" Property="Background" Value="#141D30"/>
+                                <Setter TargetName="border" Property="BorderBrush" Value="#6366F1"/>
+                                <Setter TargetName="border" Property="Background" Value="#141B2D"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -141,14 +173,14 @@
 
         <!-- Premium Rounded PasswordBox Style -->
         <Style TargetType="{x:Type PasswordBox}">
-            <Setter Property="Background" Value="#121826"/>
+            <Setter Property="Background" Value="#101524"/>
             <Setter Property="Foreground" Value="#F8FAFC"/>
-            <Setter Property="BorderBrush" Value="#222F44"/>
+            <Setter Property="BorderBrush" Value="#1E273D"/>
             <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="Padding" Value="12,8"/>
-            <Setter Property="FontSize" Value="14"/>
-            <Setter Property="CaretBrush" Value="#60A5FA"/>
-            <Setter Property="SelectionBrush" Value="#2563EB"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="CaretBrush" Value="#818CF8"/>
+            <Setter Property="SelectionBrush" Value="#6366F1"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="{x:Type PasswordBox}">
@@ -162,11 +194,11 @@
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="border" Property="BorderBrush" Value="#3B82F6"/>
+                                <Setter TargetName="border" Property="BorderBrush" Value="#38496E"/>
                             </Trigger>
                             <Trigger Property="IsKeyboardFocused" Value="True">
-                                <Setter TargetName="border" Property="BorderBrush" Value="#3B82F6"/>
-                                <Setter TargetName="border" Property="Background" Value="#141D30"/>
+                                <Setter TargetName="border" Property="BorderBrush" Value="#6366F1"/>
+                                <Setter TargetName="border" Property="Background" Value="#141B2D"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -174,14 +206,14 @@
             </Setter>
         </Style>
 
-        <!-- Premium Primary Button Style -->
+        <!-- Premium Primary Button Style (Electric Indigo) -->
         <Style x:Key="PrimaryButton" TargetType="{x:Type Button}">
-            <Setter Property="Background" Value="#2563EB"/>
+            <Setter Property="Background" Value="{StaticResource AccentGradient}"/>
             <Setter Property="Foreground" Value="#FFFFFF"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
             <Setter Property="FontSize" Value="13"/>
             <Setter Property="Cursor" Value="Hand"/>
-            <Setter Property="Padding" Value="16,8"/>
+            <Setter Property="Padding" Value="16,9"/>
             <Setter Property="BorderThickness" Value="0"/>
             <Setter Property="Template">
                 <Setter.Value>
@@ -195,13 +227,13 @@
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="border" Property="Background" Value="#3B82F6"/>
+                                <Setter TargetName="border" Property="Background" Value="#4F46E5"/>
                             </Trigger>
                             <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="border" Property="Background" Value="#1D4ED8"/>
+                                <Setter TargetName="border" Property="Background" Value="#4338CA"/>
                             </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
-                                <Setter TargetName="border" Property="Background" Value="#1E293B"/>
+                                <Setter TargetName="border" Property="Background" Value="#1E273D"/>
                                 <Setter Property="Foreground" Value="#64748B"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
@@ -212,13 +244,13 @@
 
         <!-- Premium Secondary Button Style -->
         <Style x:Key="SecondaryButton" TargetType="{x:Type Button}">
-            <Setter Property="Background" Value="#1E283A"/>
+            <Setter Property="Background" Value="#151C2C"/>
             <Setter Property="Foreground" Value="#E2E8F0"/>
             <Setter Property="FontWeight" Value="Medium"/>
             <Setter Property="FontSize" Value="13"/>
             <Setter Property="Cursor" Value="Hand"/>
-            <Setter Property="Padding" Value="16,8"/>
-            <Setter Property="BorderBrush" Value="#2D3B52"/>
+            <Setter Property="Padding" Value="14,8"/>
+            <Setter Property="BorderBrush" Value="#25314C"/>
             <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="Template">
                 <Setter.Value>
@@ -234,14 +266,14 @@
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="border" Property="Background" Value="#28354A"/>
-                                <Setter TargetName="border" Property="BorderBrush" Value="#435574"/>
+                                <Setter TargetName="border" Property="Background" Value="#1E273D"/>
+                                <Setter TargetName="border" Property="BorderBrush" Value="#3B4C72"/>
                             </Trigger>
                             <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="border" Property="Background" Value="#17202F"/>
+                                <Setter TargetName="border" Property="Background" Value="#121826"/>
                             </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
-                                <Setter TargetName="border" Property="Background" Value="#121824"/>
+                                <Setter TargetName="border" Property="Background" Value="#0F1420"/>
                                 <Setter Property="Foreground" Value="#475569"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
@@ -252,14 +284,14 @@
 
         <!-- Premium Danger Button Style -->
         <Style x:Key="DangerButton" TargetType="{x:Type Button}">
-            <Setter Property="Background" Value="#3F121E"/>
+            <Setter Property="Background" Value="#3B121D"/>
             <Setter Property="Foreground" Value="#FDA4AF"/>
-            <Setter Property="BorderBrush" Value="#5C1D2D"/>
+            <Setter Property="BorderBrush" Value="#5C1B2A"/>
             <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="FontWeight" Value="Medium"/>
             <Setter Property="FontSize" Value="13"/>
             <Setter Property="Cursor" Value="Hand"/>
-            <Setter Property="Padding" Value="16,8"/>
+            <Setter Property="Padding" Value="14,8"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="{x:Type Button}">
@@ -280,6 +312,46 @@
                             </Trigger>
                             <Trigger Property="IsPressed" Value="True">
                                 <Setter TargetName="border" Property="Background" Value="#881337"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="border" Property="Background" Value="#18141F"/>
+                                <Setter Property="Foreground" Value="#475569"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Premium Sidebar Navigation Tab Button Style -->
+        <Style x:Key="NavTabButton" TargetType="{x:Type RadioButton}">
+            <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="#94A3B8"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="FontWeight" Value="Medium"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Height" Value="42"/>
+            <Setter Property="Margin" Value="0,2,0,2"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type RadioButton}">
+                        <Border x:Name="NavBorder"
+                                Background="{TemplateBinding Background}"
+                                CornerRadius="8"
+                                Padding="12,0"
+                                SnapsToDevicePixels="True">
+                            <ContentPresenter VerticalAlignment="Center" HorizontalAlignment="Left"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="NavBorder" Property="Background" Value="#171E30"/>
+                                <Setter Property="Foreground" Value="#F8FAFC"/>
+                            </Trigger>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="NavBorder" Property="Background" Value="#1F2840"/>
+                                <Setter Property="Foreground" Value="#FFFFFF"/>
+                                <Setter Property="FontWeight" Value="SemiBold"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
