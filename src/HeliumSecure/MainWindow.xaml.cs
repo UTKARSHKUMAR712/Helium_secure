@@ -269,6 +269,13 @@ public partial class MainWindow : Window
         StatusMessageContainer.Visibility = Visibility.Collapsed;
     }
 
+    private void OnSettingsClick(object sender, RoutedEventArgs e)
+    {
+        var settingsWin = new SettingsWindow(_profileManager) { Owner = this };
+        settingsWin.ShowDialog();
+        RefreshProfileList(_selectedItem?.Id);
+    }
+
     private void OnNewProfileClick(object sender, RoutedEventArgs e)
     {
         var dialog = new CreateProfileWindow(_profileManager) { Owner = this };

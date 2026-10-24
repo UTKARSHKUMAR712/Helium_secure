@@ -1,0 +1,82 @@
+<Window x:Class="HeliumSecure.Views.ClearStorageDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Clear Profile Storage" Height="520" Width="480"
+        WindowStartupLocation="CenterOwner" ResizeMode="NoResize"
+        Background="#0B0F19" Foreground="#F8FAFC" FontFamily="Segoe UI"
+        WindowStyle="SingleBorderWindow">
+    <Grid Margin="28,24,28,20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Header -->
+        <StackPanel Grid.Row="0" Margin="0,0,0,16">
+            <TextBlock Text="Clear Storage Categories" FontSize="20" FontWeight="Bold" Foreground="#FFFFFF"/>
+            <TextBlock x:Name="ProfileSubtitle" Text="Select browser data categories to purge from this profile." FontSize="12" Foreground="#818EA3" Margin="0,4,0,0"/>
+        </StackPanel>
+
+        <!-- Categories & Password -->
+        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Focusable="False">
+            <StackPanel VerticalAlignment="Top">
+                <!-- Cache Checkbox -->
+                <Border Background="#111827" BorderBrush="#1F293D" BorderThickness="1" CornerRadius="8" Padding="14,10" Margin="0,0,0,10">
+                    <CheckBox x:Name="CacheCheckbox" IsChecked="True" VerticalAlignment="Center">
+                        <StackPanel Margin="6,0,0,0">
+                            <TextBlock Text="Browser Cache" FontWeight="SemiBold" FontSize="13" Foreground="#FFFFFF"/>
+                            <TextBlock Text="Webpage cache, code cache, and shader caches. Safe to clear." FontSize="11" Foreground="#818EA3" TextWrapping="Wrap"/>
+                        </StackPanel>
+                    </CheckBox>
+                </Border>
+
+                <!-- History Checkbox -->
+                <Border Background="#111827" BorderBrush="#1F293D" BorderThickness="1" CornerRadius="8" Padding="14,10" Margin="0,0,0,10">
+                    <CheckBox x:Name="HistoryCheckbox" IsChecked="False" VerticalAlignment="Center">
+                        <StackPanel Margin="6,0,0,0">
+                            <TextBlock Text="Browsing History" FontWeight="SemiBold" FontSize="13" Foreground="#FFFFFF"/>
+                            <TextBlock Text="Visited pages, top sites, and search suggestions." FontSize="11" Foreground="#818EA3" TextWrapping="Wrap"/>
+                        </StackPanel>
+                    </CheckBox>
+                </Border>
+
+                <!-- Cookies & Site Data Checkbox with Warning -->
+                <Border Background="#1A1522" BorderBrush="#4C1D2A" BorderThickness="1" CornerRadius="8" Padding="14,10" Margin="0,0,0,10">
+                    <CheckBox x:Name="CookiesCheckbox" IsChecked="False" VerticalAlignment="Center">
+                        <StackPanel Margin="6,0,0,0">
+                            <TextBlock Text="Cookies and Site Data" FontWeight="SemiBold" FontSize="13" Foreground="#F43F5E"/>
+                            <TextBlock Text="⚠️ Warning: This will sign you out of websites and reset offline site storage." FontSize="11" Foreground="#FDA4AF" TextWrapping="Wrap"/>
+                        </StackPanel>
+                    </CheckBox>
+                </Border>
+
+                <!-- Download History Checkbox -->
+                <Border Background="#111827" BorderBrush="#1F293D" BorderThickness="1" CornerRadius="8" Padding="14,10" Margin="0,0,0,14">
+                    <CheckBox x:Name="DownloadsCheckbox" IsChecked="False" VerticalAlignment="Center">
+                        <StackPanel Margin="6,0,0,0">
+                            <TextBlock Text="Download History" FontWeight="SemiBold" FontSize="13" Foreground="#FFFFFF"/>
+                            <TextBlock Text="List of downloaded files. Files on your computer remain untouched." FontSize="11" Foreground="#818EA3" TextWrapping="Wrap"/>
+                        </StackPanel>
+                    </CheckBox>
+                </Border>
+
+                <!-- Master Password Prompt -->
+                <TextBlock Text="ENTER MASTER PASSWORD TO RE-ENCRYPT VAULT" FontSize="11" FontWeight="Bold" Foreground="#818EA3" Margin="2,0,0,6"/>
+                <PasswordBox x:Name="PasswordBox" Height="40" Margin="0,0,0,8"/>
+
+                <Border x:Name="ErrorContainer" Background="#3B1219" BorderBrush="#E11D48" BorderThickness="1" CornerRadius="6" Padding="12,8" Margin="0,0,0,8" Visibility="Collapsed">
+                    <TextBlock x:Name="ErrorMessage" Text="" FontSize="12" Foreground="#FDA4AF" TextWrapping="Wrap"/>
+                </Border>
+            </StackPanel>
+        </ScrollViewer>
+
+        <!-- Footer -->
+        <Border Grid.Row="2" BorderBrush="#1C2638" BorderThickness="0,1,0,0" Padding="0,14,0,0">
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                <Button Content="Cancel" IsCancel="True" Style="{StaticResource SecondaryButton}" Width="85" Height="38" Margin="0,0,10,0" Click="OnCancelClick"/>
+                <Button x:Name="ClearButton" Content="Clear Selected Storage" IsDefault="True" Style="{StaticResource DangerButton}" Width="165" Height="38" Click="OnClearClick"/>
+            </StackPanel>
+        </Border>
+    </Grid>
+</Window>
