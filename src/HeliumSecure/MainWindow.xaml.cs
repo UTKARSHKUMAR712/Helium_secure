@@ -6,6 +6,7 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Shapes;
 using HeliumSecure.Core.Guest;
+using HeliumSecure.Core.Hardware;
 using HeliumSecure.Core.Models;
 using HeliumSecure.Core.Process;
 using HeliumSecure.Core.Profiles;
@@ -31,7 +32,9 @@ public partial class MainWindow : Window
 {
     private readonly ProfileManager _profileManager;
     private readonly GuestSessionManager _guestManager;
+    private readonly ISystemMetricsProvider _metricsProvider;
     private readonly System.Windows.Threading.DispatcherTimer _lockoutCountdownTimer;
+    private readonly System.Windows.Threading.DispatcherTimer _metricsTimer;
     private string? _heliumExecutablePath;
     private bool _isPasswordRevealed;
     private ProfileDisplayItem? _selectedItem;
@@ -47,6 +50,7 @@ public partial class MainWindow : Window
 
         _profileManager = new ProfileManager();
         _guestManager = new GuestSessionManager();
+        _metricsProvider = new WindowsSystemMetricsProvider();
 
         _lockoutCountdownTimer = new System.Windows.Threading.DispatcherTimer
         {
@@ -54,14 +58,47 @@ public partial class MainWindow : Window
         };
         _lockoutCountdownTimer.Tick += OnLockoutTimerTick;
 
+        _metricsTimer = new System.Windows.Threading.DispatcherTimer
+        {
+            Interval = TimeSpan.FromSeconds(2)
+        };
+        _metricsTimer.Tick += OnMetricsTimerTick;
+        _metricsTimer.Start();
+
         DetectHeliumExecutable();
         RefreshProfileList();
+        UpdateMetricsDisplay();
 
         // If no profiles exist, prompt to create first one
         if (_profileManager.ListProfiles().Count == 0)
         {
             Dispatcher.InvokeAsync(PromptCreateFirstProfile);
         }
+    }
+
+    private void OnMetricsTimerTick(object? sender, EventArgs e)
+    {
+        UpdateMetricsDisplay();
+    }
+
+    private void UpdateMetricsDisplay()
+    {
+        _ = Task.Run(() =>
+        {
+            try
+            {
+                var metrics = _metricsProvider.GetCurrentMetrics();
+                string overlayStr = metrics.FormatOverlayString();
+                string tooltipStr = metrics.FormatTooltip();
+
+                Dispatcher.Invoke(() =>
+                {
+                    MetricsOverlayText.Text = overlayStr;
+                    MetricsOverlayContainer.ToolTip = tooltipStr;
+                });
+            }
+            catch { }
+        });
     }
 
     private void OnLockoutTimerTick(object? sender, EventArgs e)
