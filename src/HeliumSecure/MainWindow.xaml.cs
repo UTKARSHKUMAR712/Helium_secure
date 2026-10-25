@@ -490,32 +490,10 @@ public partial class MainWindow : Window
             var session = await _profileManager.UnlockAndLaunchAsync(
                 item.Id,
                 password,
-                _heliumExecutablePath,
-                onSessionCompleted: () =>
-                {
-                    Dispatcher.Invoke(() =>
-                    {
-                        this.Show();
-                        this.WindowState = WindowState.Normal;
-                        this.Activate();
-                        this.Focus();
-                        ShowStatus($"Session for '{item.Name}' closed. Vault re-encrypted.", isError: false);
-                        item.RefreshProperties();
-                        UpdateDetailsView();
-                        UpdateDashboardMetrics();
-                    });
-                });
+                _heliumExecutablePath);
 
-            // Auto-hide launcher while browser session is running
-            this.Hide();
-
-            item.IsExpanded = false;
-            if (pb != null) pb.Password = string.Empty;
-
-            ShowStatus($"Browser active for '{item.Name}'. Vault will re-encrypt on exit.", isError: false);
-            item.RefreshProperties();
-            UpdateDetailsView();
-            UpdateDashboardMetrics();
+            // Auto-close launcher after browser successfully launched
+            Application.Current.Shutdown();
         }
         catch (ProfileLockedOutException ex)
         {
@@ -783,27 +761,10 @@ public partial class MainWindow : Window
             var session = await _profileManager.UnlockAndLaunchAsync(
                 profileId,
                 password,
-                _heliumExecutablePath,
-                onSessionCompleted: () =>
-                {
-                    Dispatcher.Invoke(() =>
-                    {
-                        this.Show();
-                        this.WindowState = WindowState.Normal;
-                        this.Activate();
-                        this.Focus();
-                        ShowStatus("Browser session ended. Vault securely encrypted.", isError: false);
-                        UpdateDetailsView();
-                        UpdateDashboardMetrics();
-                    });
-                });
+                _heliumExecutablePath);
 
-            // Auto-hide launcher while browser session is running
-            this.Hide();
-
-            ShowStatus("Browser active. Vault will securely re-encrypt on exit.", isError: false);
-            UpdateDetailsView();
-            UpdateDashboardMetrics();
+            // Auto-close launcher after browser successfully launched
+            Application.Current.Shutdown();
         }
         catch (ProfileLockedOutException ex)
         {
@@ -1034,22 +995,8 @@ public partial class MainWindow : Window
         try
         {
             var guestSession = _guestManager.StartSession(_heliumExecutablePath);
-            this.Hide();
-            ShowStatus("Disposable Guest session active. No history or cookies will be saved.", isError: false);
-
-            _ = Task.Run(async () =>
-            {
-                await guestSession.WaitForExitAndCleanupAsync();
-                Dispatcher.Invoke(() =>
-                {
-                    this.Show();
-                    this.WindowState = WindowState.Normal;
-                    this.Activate();
-                    this.Focus();
-                    ShowStatus("Guest session terminated. All temporary data shredded.", isError: false);
-                    UpdateDashboardMetrics();
-                });
-            });
+            // Auto-close launcher after browser successfully launched
+            Application.Current.Shutdown();
         }
         catch (Exception ex)
         {
@@ -1060,24 +1007,7 @@ public partial class MainWindow : Window
     protected override void OnClosing(CancelEventArgs e)
     {
         base.OnClosing(e);
-
-        var activeProfiles = _profileManager.ListProfiles().Where(p => _profileManager.IsProfileLocked(p.Id)).ToList();
-        if (activeProfiles.Any())
-        {
-            var result = MessageBox.Show(
-                "One or more Helium browser sessions are currently active.\n\n" +
-                "Closing HeliumSecure will close active browser sessions and securely re-encrypt your vaults.\n\n" +
-                "Do you want to close HeliumSecure now?",
-                "HeliumSecure — Active Sessions Running",
-                MessageBoxButton.YesNo,
-                MessageBoxImage.Warning);
-
-            if (result != MessageBoxResult.Yes)
-            {
-                e.Cancel = true;
-                return;
-            }
-        }
+        // Closing HeliumSecure does not terminate running Helium browser sessions
     }
 
     // =========================================================================

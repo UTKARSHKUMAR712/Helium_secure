@@ -12,7 +12,7 @@ Write-Host "==========================================" -ForegroundColor Cyan
 
 $RepoRoot = Resolve-Path "$PSScriptRoot\.."
 $StagingDir = "$OutputDir\HeliumSecure"
-$ZipPath = "$OutputDir\HeliumSecure_v1.0.2_win-x64.zip"
+$ZipPath = "$OutputDir\HeliumSecure_v1.0.3_win-x64.zip"
 $SetupExePath = "$OutputDir\HeliumSecure-Setup.exe"
 
 # Step 1: Clean legacy artifacts and ensure staging directories exist

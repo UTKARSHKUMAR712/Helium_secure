@@ -1,4 +1,5 @@
 using System.IO.Compression;
+using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
 using HeliumSecure.Core.Crypto;
@@ -22,7 +23,14 @@ public sealed class VaultManager
         "GraphiteDawnCache",
         "hyphen-data",
         "File System",
-        "blob_storage"
+        "blob_storage",
+        "Service Worker",
+        "DawnGraphiteCache",
+        "DawnWebGPUCache",
+        "GPUPersistentCache",
+        "CertificateRevocation",
+        "component_crx_cache",
+        "segmentation_platform"
     };
 
     private static readonly HashSet<string> ExcludedFileExtensions = new(StringComparer.OrdinalIgnoreCase)
@@ -38,6 +46,26 @@ public sealed class VaultManager
         "LOG.old",
         "chrome_shutdown_ms.txt"
     };
+
+    [DllImport("psapi.dll")]
+    private static extern bool EmptyWorkingSet(nint hProcess);
+
+    /// <summary>
+    /// Forces complete garbage collection, Large Object Heap compaction, and trims the process working set.
+    /// Reduces launcher memory consumption from hundreds of MBs down to minimal footprint.
+    /// </summary>
+    public static void TrimProcessMemory()
+    {
+        try
+        {
+            System.Runtime.GCSettings.LargeObjectHeapCompactionMode = System.Runtime.GCLargeObjectHeapCompactionMode.CompactOnce;
+            GC.Collect(2, GCCollectionMode.Forced, blocking: true, compacting: true);
+            GC.WaitForPendingFinalizers();
+            GC.Collect(2, GCCollectionMode.Forced, blocking: true, compacting: true);
+            EmptyWorkingSet(System.Diagnostics.Process.GetCurrentProcess().Handle);
+        }
+        catch { }
+    }
 
     private static byte[] GetAad(Guid profileId) =>
         Encoding.UTF8.GetBytes($"HELIUMLOCK:{profileId:D}:v1");
@@ -109,6 +137,7 @@ public sealed class VaultManager
         {
             AesGcmVaultCrypto.Wipe(key);
             AesGcmVaultCrypto.Wipe(archiveBytes);
+            TrimProcessMemory();
         }
     }
 
@@ -130,21 +159,17 @@ public sealed class VaultManager
         }
         catch (Exception ex) when (ex is CryptographicException or InvalidDataException or EndOfStreamException or FileNotFoundException)
         {
-            // If primary vault is missing or corrupted, check if a valid .bak exists
             if (File.Exists(bakPath))
             {
                 try
                 {
                     UnlockVaultFile(bakPath, profileId, password, destinationDirectory, preDerivedKey: null);
-
-                    // Recovery succeeded from .bak! Restore .bak to primary
                     File.Copy(bakPath, vaultPath, overwrite: true);
                     NtfsSecurityHelper.SecureFile(vaultPath);
                     return;
                 }
                 catch
                 {
-                    // If .bak also fails or password was wrong, throw original exception
                     throw;
                 }
             }
@@ -243,7 +268,6 @@ public sealed class VaultManager
             using var zip = new ZipArchive(mem, ZipArchiveMode.Read);
             foreach (var entry in zip.Entries)
             {
-                // Prevent path traversal
                 if (entry.FullName.Contains("..") || Path.IsPathRooted(entry.FullName))
                 {
                     continue;
@@ -270,13 +294,12 @@ public sealed class VaultManager
             }
             AesGcmVaultCrypto.Wipe(plaintext);
             AesGcmVaultCrypto.Wipe(ciphertext);
+            TrimProcessMemory();
         }
     }
 
     /// <summary>
     /// Verifies the password against the vault and derives the encryption key in a single pass.
-    /// If verification succeeds, returns true and populates derivedKey.
-    /// If verification fails, returns false and outputs null.
     /// </summary>
     public static bool VerifyAndDeriveKey(string vaultPath, Guid profileId, string password, out byte[]? derivedKey)
     {
@@ -296,14 +319,7 @@ public sealed class VaultManager
             {
                 if (File.Exists(bakPath))
                 {
-                    try
-                    {
-                        return VerifyAndDeriveKeyFromFile(bakPath, profileId, password, out derivedKey);
-                    }
-                    catch
-                    {
-                        return false;
-                    }
+                    try { return VerifyAndDeriveKeyFromFile(bakPath, profileId, password, out derivedKey); } catch { return false; }
                 }
                 return false;
             }
@@ -311,28 +327,14 @@ public sealed class VaultManager
             {
                 if (File.Exists(bakPath))
                 {
-                    try
-                    {
-                        return VerifyAndDeriveKeyFromFile(bakPath, profileId, password, out derivedKey);
-                    }
-                    catch
-                    {
-                        return false;
-                    }
+                    try { return VerifyAndDeriveKeyFromFile(bakPath, profileId, password, out derivedKey); } catch { return false; }
                 }
                 return false;
             }
         }
         else if (File.Exists(bakPath))
         {
-            try
-            {
-                return VerifyAndDeriveKeyFromFile(bakPath, profileId, password, out derivedKey);
-            }
-            catch
-            {
-                return false;
-            }
+            try { return VerifyAndDeriveKeyFromFile(bakPath, profileId, password, out derivedKey); } catch { return false; }
         }
 
         return false;
@@ -382,7 +384,7 @@ public sealed class VaultManager
 
             if (plaintext != null)
             {
-                derivedKey = key; // Keep key for subsequent unlock
+                derivedKey = key;
                 return true;
             }
 
@@ -398,6 +400,7 @@ public sealed class VaultManager
         {
             AesGcmVaultCrypto.Wipe(plaintext);
             AesGcmVaultCrypto.Wipe(ciphertext);
+            TrimProcessMemory();
         }
     }
 
@@ -417,9 +420,6 @@ public sealed class VaultManager
 
     /// <summary>
     /// Re-encrypts the vault file with a new password in memory without extracting files to disk.
-    /// Derives a new Argon2id key with a fresh salt and encrypts with a fresh nonce.
-    /// Uses atomic swap (.tmp -> .bak -> committed) to ensure fail-safe operation.
-    /// Memory buffers are wiped immediately.
     /// </summary>
     public static void ChangeVaultPassword(
         string vaultPath,
@@ -476,7 +476,6 @@ public sealed class VaultManager
                 GetAad(profileId)
             );
 
-            // Generate fresh salt and fresh key for new password
             byte[] newSalt = Argon2Helper.GenerateSalt(config.SaltSizeBytes);
             newKey = Argon2Helper.DeriveKey(newPassword, newSalt, config);
 
@@ -510,7 +509,6 @@ public sealed class VaultManager
                 fs.Flush(flushToDisk: true);
             }
 
-            // Verify the newly written tmp file
             using (var fs = new FileStream(tmpPath, FileMode.Open, FileAccess.Read, FileShare.Read))
             using (var reader = new BinaryReader(fs))
             {
@@ -521,15 +519,13 @@ public sealed class VaultManager
                 }
             }
 
-            // Safe atomic swap: primary -> bak, tmp -> primary
             File.Move(vaultPath, bakPath, overwrite: true);
             File.Move(tmpPath, vaultPath, overwrite: true);
             NtfsSecurityHelper.SecureFile(vaultPath);
 
-            // Once committed, clean the bak file
             if (File.Exists(bakPath))
             {
-                try { File.Delete(bakPath); } catch { /* best effort */ }
+                try { File.Delete(bakPath); } catch { }
             }
         }
         finally
@@ -538,6 +534,7 @@ public sealed class VaultManager
             AesGcmVaultCrypto.Wipe(newKey);
             AesGcmVaultCrypto.Wipe(archiveBytes);
             AesGcmVaultCrypto.Wipe(oldCiphertext);
+            TrimProcessMemory();
         }
     }
 
@@ -609,7 +606,6 @@ public sealed class VaultManager
                 fs.Flush(flushToDisk: true);
             }
 
-            // Verify the newly written tmp file before touching the original
             using (var fs = new FileStream(tmpPath, FileMode.Open, FileAccess.Read, FileShare.Read))
             using (var reader = new BinaryReader(fs))
             {
@@ -620,7 +616,6 @@ public sealed class VaultManager
                 }
             }
 
-            // Safe atomic swap: primary -> bak, tmp -> primary
             if (File.Exists(vaultPath))
             {
                 File.Move(vaultPath, bakPath, overwrite: true);
@@ -629,13 +624,11 @@ public sealed class VaultManager
             File.Move(tmpPath, vaultPath, overwrite: true);
             NtfsSecurityHelper.SecureFile(vaultPath);
 
-            // Once committed and secured, clean the bak file
             if (File.Exists(bakPath))
             {
-                try { File.Delete(bakPath); } catch { /* best effort */ }
+                try { File.Delete(bakPath); } catch { }
             }
 
-            // Shred/clean working directory if requested
             if (cleanWorkingDirectory)
             {
                 CleanDirectorySafely(workingDirectory);
@@ -645,6 +638,7 @@ public sealed class VaultManager
         {
             AesGcmVaultCrypto.Wipe(key);
             AesGcmVaultCrypto.Wipe(archiveBytes);
+            TrimProcessMemory();
         }
     }
 
@@ -653,7 +647,6 @@ public sealed class VaultManager
         var dirInfo = new DirectoryInfo(sourceDir);
         foreach (var file in dirInfo.GetFiles())
         {
-            // Skip lock files, temporary files, or excluded volatile files
             if (ExcludedFileNames.Contains(file.Name) ||
                 ExcludedFileExtensions.Contains(file.Extension))
             {
@@ -664,13 +657,11 @@ public sealed class VaultManager
                 ? file.Name
                 : Path.Combine(relativeBase, file.Name).Replace('\\', '/');
 
-            // Use Fastest compression for rapid responsiveness since data is securely AES-GCM encrypted
             zip.CreateEntryFromFile(file.FullName, entryName, CompressionLevel.Fastest);
         }
 
         foreach (var subDir in dirInfo.GetDirectories())
         {
-            // Skip ephemeral cache directories (Cache, Code Cache, GPUCache, etc.)
             if (ExcludedDirectoryNames.Contains(subDir.Name))
             {
                 continue;
@@ -702,7 +693,6 @@ public sealed class VaultManager
                 {
                     try
                     {
-                        // Overwrite sensitive user profile data files with zeros
                         bool isCacheFile = ExcludedDirectoryNames.Any(ex =>
                             file.FullName.Contains(Path.DirectorySeparatorChar + ex + Path.DirectorySeparatorChar) ||
                             file.FullName.Contains(Path.AltDirectorySeparatorChar + ex + Path.AltDirectorySeparatorChar));

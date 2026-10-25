@@ -48,9 +48,31 @@ public class ProcessManagerTests
         int count = job.GetActiveProcessCount();
         Assert.True(count >= 1);
 
-        // Terminating the job terminates the attached process tree
+        // Explicit termination terminates the attached process tree
         job.Terminate(0);
         process.WaitForExit(3000);
         Assert.True(process.HasExited);
+    }
+
+    [Fact]
+    public void JobObject_Dispose_DoesNotKillAttachedProcess()
+    {
+        var psi = new System.Diagnostics.ProcessStartInfo
+        {
+            FileName = "cmd.exe",
+            Arguments = "/c ping 127.0.0.1 -n 10 > nul",
+            CreateNoWindow = true,
+            UseShellExecute = false
+        };
+
+        using var process = System.Diagnostics.Process.Start(psi);
+        Assert.NotNull(process);
+
+        var job = new JobObject();
+        job.AssignProcess(process);
+        job.Dispose(); // Closing/disposing JobObject must NOT kill the process
+
+        Assert.False(process.HasExited);
+        process.Kill();
     }
 }

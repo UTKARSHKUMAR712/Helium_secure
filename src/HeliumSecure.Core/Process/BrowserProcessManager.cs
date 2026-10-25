@@ -27,7 +27,6 @@ public sealed class BrowserProcessManager : IDisposable
             {
                 return Path.GetFullPath(candidatePath);
             }
-            // Explicit candidate was requested but does not exist
             return null;
         }
 
@@ -59,7 +58,7 @@ public sealed class BrowserProcessManager : IDisposable
 
     /// <summary>
     /// Launches Helium with the isolated user-data-dir and attaches it to the tracking Job Object.
-    /// Strict Chromium flags are passed to prevent background processes from persisting when the window is closed.
+    /// Helium browser runs with independent lifecycle and will not be killed if the launcher closes.
     /// </summary>
     public System.Diagnostics.Process Launch(string userDataDir, string? initialUrl = null, string? additionalArgs = null)
     {
@@ -83,9 +82,6 @@ public sealed class BrowserProcessManager : IDisposable
             CreateNoWindow = false
         };
 
-        // Strict argument sanitization and formatting:
-        // Ensure background mode, background sync, and component updaters are disabled so the browser
-        // completely closes when the user clicks the 'X' (cross) button.
         var arguments = new List<string>
         {
             $"--user-data-dir=\"{userDataDir}\"",
@@ -118,7 +114,6 @@ public sealed class BrowserProcessManager : IDisposable
             throw new InvalidOperationException("Failed to start browser process.");
         }
 
-        // Assign to Job Object for tracking and enforcing termination of all child processes
         _jobObject.AssignProcess(_rootProcess);
 
         return _rootProcess;
@@ -126,8 +121,6 @@ public sealed class BrowserProcessManager : IDisposable
 
     /// <summary>
     /// Asynchronously monitors and waits until the browser process and all child processes exit.
-    /// Once the main window exits, gives a brief grace period to flush disk buffers, then
-    /// terminates all child background processes immediately to prevent lingering tasks.
     /// </summary>
     public async Task WaitForExitAsync(int pollIntervalMs = 250, int maxGracePeriodMs = 2000, CancellationToken ct = default)
     {
@@ -140,33 +133,27 @@ public sealed class BrowserProcessManager : IDisposable
 
         try
         {
-            // First wait for the main window process to exit
             await _rootProcess.WaitForExitAsync(ct).ConfigureAwait(false);
         }
         catch (OperationCanceledException)
         {
-            Terminate();
             throw;
         }
 
-        // Once the main window exits, wait briefly for renderers/GPU to exit cleanly
         var stopwatch = Stopwatch.StartNew();
         while (_jobObject != null && _jobObject.GetActiveProcessCount() > 0)
         {
             if (stopwatch.ElapsedMilliseconds > maxGracePeriodMs)
             {
-                break; // Grace period expired - terminate lingering processes
+                break;
             }
 
             await Task.Delay(pollIntervalMs, ct).ConfigureAwait(false);
         }
-
-        // Forcibly terminate any lingering background processes in the Job Object
-        _jobObject?.Terminate(0);
     }
 
     /// <summary>
-    /// Forcibly terminates the browser process and all child processes in the Job Object.
+    /// Explicitly terminates the browser process and all child processes when requested.
     /// </summary>
     public void Terminate()
     {
@@ -186,11 +173,13 @@ public sealed class BrowserProcessManager : IDisposable
         catch { }
     }
 
+    /// <summary>
+    /// Disposes resources. Closing the launcher does NOT kill the Helium browser.
+    /// </summary>
     public void Dispose()
     {
         if (!_disposed)
         {
-            Terminate();
             _rootProcess?.Dispose();
             _jobObject?.Dispose();
             _disposed = true;

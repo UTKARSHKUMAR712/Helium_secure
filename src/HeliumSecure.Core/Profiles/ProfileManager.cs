@@ -696,22 +696,35 @@ public sealed class ProfileManager
             string vaultPath = GetVaultPath(profileId);
             string workingDir = GetProfileWorkingDirectory(profileId);
 
-            // Crash recovery check: if workingDir already exists and is non-empty, back it up safely
-            if (Directory.Exists(workingDir) && Directory.EnumerateFileSystemEntries(workingDir).Any())
-            {
-                string crashRecoveryDir = workingDir + $"_crash_{DateTimeOffset.UtcNow.ToUnixTimeSeconds()}";
-                Directory.Move(workingDir, crashRecoveryDir);
-            }
+            // Check if profile directory is already extracted and ready to launch
+            bool isAlreadyExtracted = Directory.Exists(workingDir) &&
+                File.Exists(Path.Combine(workingDir, "Default", "Preferences"));
 
-            // Unlock and decrypt vault to working directory asynchronously (single-pass key derivation)
-            if (derivedKey != null)
+            if (!isAlreadyExtracted)
             {
-                await Task.Run(() => VaultManager.UnlockVaultWithKey(vaultPath, profileId, derivedKey, workingDir), ct).ConfigureAwait(false);
+                // Crash recovery check: if workingDir already exists with corrupted/incomplete files, back it up safely
+                if (Directory.Exists(workingDir) && Directory.EnumerateFileSystemEntries(workingDir).Any())
+                {
+                    string crashRecoveryDir = workingDir + $"_crash_{DateTimeOffset.UtcNow.ToUnixTimeSeconds()}";
+                    Directory.Move(workingDir, crashRecoveryDir);
+                }
+
+                // Unlock and decrypt vault to working directory asynchronously (single-pass key derivation)
+                if (derivedKey != null)
+                {
+                    await Task.Run(() => VaultManager.UnlockVaultWithKey(vaultPath, profileId, derivedKey, workingDir), ct).ConfigureAwait(false);
+                }
+                else
+                {
+                    await Task.Run(() => VaultManager.UnlockVault(vaultPath, profileId, password, workingDir), ct).ConfigureAwait(false);
+                }
             }
             else
             {
-                await Task.Run(() => VaultManager.UnlockVault(vaultPath, profileId, password, workingDir), ct).ConfigureAwait(false);
+                if (derivedKey != null) AesGcmVaultCrypto.Wipe(derivedKey);
             }
+
+            VaultManager.TrimProcessMemory();
 
             var processManager = new BrowserProcessManager(customHeliumExe);
             processManager.Launch(workingDir);
