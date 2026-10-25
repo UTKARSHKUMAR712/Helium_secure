@@ -81,6 +81,25 @@ public sealed class ProfileManager
         NtfsSecurityHelper.SecureDirectory(_workingDirectory);
 
         Manifest = ProfileManifest.Load(_manifestPath);
+        CleanupStaleCrashDirectories();
+    }
+
+    /// <summary>
+    /// Purges orphaned crash directories from prior abnormal terminations or crashes.
+    /// </summary>
+    public void CleanupStaleCrashDirectories()
+    {
+        if (!Directory.Exists(_workingDirectory)) return;
+
+        try
+        {
+            var di = new DirectoryInfo(_workingDirectory);
+            foreach (var crashDir in di.GetDirectories("*_crash_*"))
+            {
+                VaultManager.CleanDirectorySafely(crashDir.FullName);
+            }
+        }
+        catch { }
     }
 
     private object GetAuthLock(Guid profileId) =>
@@ -228,6 +247,17 @@ public sealed class ProfileManager
     /// </summary>
     public AuthenticationResult ValidatePasswordAttempt(Guid profileId, string password)
     {
+        var result = ValidatePasswordAttempt(profileId, password, out var key);
+        if (key != null)
+        {
+            AesGcmVaultCrypto.Wipe(key);
+        }
+        return result;
+    }
+
+    public AuthenticationResult ValidatePasswordAttempt(Guid profileId, string password, out byte[]? derivedKey)
+    {
+        derivedKey = null;
         ArgumentException.ThrowIfNullOrWhiteSpace(password);
 
         var profile = Manifest.Profiles.FirstOrDefault(p => p.Id == profileId)
@@ -281,7 +311,7 @@ public sealed class ProfileManager
             }
 
             string vaultPath = GetVaultPath(profileId);
-            bool isValid = VaultManager.VerifyPassword(vaultPath, profileId, password);
+            bool isValid = VaultManager.VerifyAndDeriveKey(vaultPath, profileId, password, out derivedKey);
 
             if (isValid)
             {
@@ -638,18 +668,21 @@ public sealed class ProfileManager
             throw new ProfileAlreadyLockedException($"Profile '{profileId}' is already active.");
         }
 
-        // Enforce two-stage authentication attempt policy
-        var authResult = ValidatePasswordAttempt(profileId, password);
+        // Enforce two-stage authentication attempt policy and obtain pre-derived key in single pass
+        var authResult = ValidatePasswordAttempt(profileId, password, out var derivedKey);
         if (authResult.Status == AuthenticationStatus.LockedOut)
         {
+            if (derivedKey != null) AesGcmVaultCrypto.Wipe(derivedKey);
             throw new ProfileLockedOutException(authResult.RemainingLockout ?? TimeSpan.FromMinutes(30), authResult.InSecondStage);
         }
         if (authResult.Status == AuthenticationStatus.TerminalDestruction)
         {
+            if (derivedKey != null) AesGcmVaultCrypto.Wipe(derivedKey);
             throw new TerminalDestructionException(profileId);
         }
         if (authResult.Status == AuthenticationStatus.InvalidPassword)
         {
+            if (derivedKey != null) AesGcmVaultCrypto.Wipe(derivedKey);
             throw new AuthenticationFailedException(
                 authResult.Message ?? "Invalid password.",
                 authResult.RemainingAttempts,
@@ -670,8 +703,15 @@ public sealed class ProfileManager
                 Directory.Move(workingDir, crashRecoveryDir);
             }
 
-            // Unlock and decrypt vault to working directory asynchronously
-            await Task.Run(() => VaultManager.UnlockVault(vaultPath, profileId, password, workingDir), ct).ConfigureAwait(false);
+            // Unlock and decrypt vault to working directory asynchronously (single-pass key derivation)
+            if (derivedKey != null)
+            {
+                await Task.Run(() => VaultManager.UnlockVaultWithKey(vaultPath, profileId, derivedKey, workingDir), ct).ConfigureAwait(false);
+            }
+            else
+            {
+                await Task.Run(() => VaultManager.UnlockVault(vaultPath, profileId, password, workingDir), ct).ConfigureAwait(false);
+            }
 
             var processManager = new BrowserProcessManager(customHeliumExe);
             processManager.Launch(workingDir);

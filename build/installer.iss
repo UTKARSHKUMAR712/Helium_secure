@@ -4,7 +4,7 @@
 ; =========================================================================
 
 #define MyAppName "HeliumSecure"
-#define MyAppVersion "1.0.1"
+#define MyAppVersion "1.0.2"
 #define MyAppPublisher "The HeliumSecure Authors"
 #define MyAppURL "https://github.com/UTKARSHKUMAR712/Helium_secure"
 #define MyAppExeName "HeliumSecure.exe"
@@ -48,32 +48,34 @@ CloseApplicationsFilter=HeliumSecure.exe
 
 ; Windows Uninstall metadata
 UninstallDisplayName={#MyAppName}
-UninstallDisplayIcon={app}\{#MyAppExeName},0
+UninstallDisplayIcon={app}\{#MyAppExeName}
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Tasks]
-Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"
+Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: checkedonce
 
 [Files]
-; Package the complete application payload including launcher and bundled browser binaries
+; Copy all published files and bundled browser dependencies from staging
 Source: "..\dist\HeliumSecure\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
-Name: "{autoprograms}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
-Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
+; Start Menu shortcut
+Name: "{autoprograms}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\{#MyAppExeName}"
+; Desktop shortcut (opt-in)
+Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
 
 [Run]
-Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent
+; Option to launch after installation
+Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Filename: "{app}\{#MyAppExeName}"; Flags: nowait postinstall skipifsilent
 
 [Code]
-// Guard against deleting user vaults or upstream Helium installations during uninstall
-procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
+// Custom Inno Setup Pascal script to ensure running instances are closed cleanly
+function InitializeUninstall(): Boolean;
+var
+  ErrorCode: Integer;
 begin
-  if CurUninstallStep = usPostUninstall then
-  begin
-    // Note: User vaults are stored in %LOCALAPPDATA%\HeliumSecure\Vaults
-    // The installer only deletes the {app} binaries folder. Vaults remain 100% safe.
-  end;
+  Result := True;
+  Exec('taskkill.exe', '/F /IM HeliumSecure.exe', '', SW_HIDE, ewWaitUntilTerminated, ErrorCode);
 end;

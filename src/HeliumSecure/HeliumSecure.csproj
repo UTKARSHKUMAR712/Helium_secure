@@ -1,26 +1,30 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <ItemGroup>
-    <ProjectReference Include="..\HeliumSecure.Core\HeliumSecure.Core.csproj" />
-  </ItemGroup>
-
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <TargetFramework>net8.0-windows</TargetFramework>
+    <RootNamespace>HeliumSecure</RootNamespace>
+    <AssemblyName>HeliumSecure</AssemblyName>
+    <TargetPlatformIdentifier>Windows</TargetPlatformIdentifier>
+    <TargetPlatformVersion>7.0</TargetPlatformVersion>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
     <Product>HeliumSecure</Product>
     <Description>HeliumSecure - Hardware-Isolated Browser Vault</Description>
-    <Version>1.0.1</Version>
-    <FileVersion>1.0.1.0</FileVersion>
-    <AssemblyVersion>1.0.1.0</AssemblyVersion>
+    <Version>1.0.2</Version>
+    <FileVersion>1.0.2.0</FileVersion>
+    <AssemblyVersion>1.0.2.0</AssemblyVersion>
     <ApplicationIcon>Assets\app.ico</ApplicationIcon>
   </PropertyGroup>
 
   <ItemGroup>
     <Resource Include="Assets\app.png" />
     <Resource Include="Assets\app.ico" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\HeliumSecure.Core\HeliumSecure.Core.csproj" />
   </ItemGroup>
 
 </Project>

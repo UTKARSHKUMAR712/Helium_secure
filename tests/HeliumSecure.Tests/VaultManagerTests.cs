@@ -150,4 +150,49 @@ public class VaultManagerTests : IDisposable
         VaultManager.UnlockVault(vaultPath, profileId, originalPassword, workingDir);
         Assert.True(File.Exists(Path.Combine(workingDir, "Default", "Preferences")));
     }
+
+    [Fact]
+    public void VerifyAndDeriveKey_And_UnlockVaultWithKey_Succeeds()
+    {
+        var profileId = Guid.NewGuid();
+        string vaultPath = Path.Combine(_testRoot, $"{profileId}.hsv");
+        string workingDir = Path.Combine(_testRoot, "working_keyed");
+        string password = "SinglePassKeyTest!";
+
+        VaultManager.InitializeNewVault(vaultPath, profileId, password, _fastConfig);
+
+        bool isValid = VaultManager.VerifyAndDeriveKey(vaultPath, profileId, password, out var key);
+        Assert.True(isValid);
+        Assert.NotNull(key);
+        Assert.Equal(32, key.Length);
+
+        VaultManager.UnlockVaultWithKey(vaultPath, profileId, key, workingDir);
+        Assert.True(File.Exists(Path.Combine(workingDir, "Default", "Preferences")));
+    }
+
+    [Fact]
+    public void LockVault_ExcludesCacheDirectories_PreservingCleanVault()
+    {
+        var profileId = Guid.NewGuid();
+        string vaultPath = Path.Combine(_testRoot, $"{profileId}.hsv");
+        string workingDir = Path.Combine(_testRoot, "working_with_cache");
+        string extractDir = Path.Combine(_testRoot, "extracted_clean");
+        string password = "CacheExclusionTest!";
+
+        Directory.CreateDirectory(workingDir);
+        Directory.CreateDirectory(Path.Combine(workingDir, "Default", "Cache"));
+        Directory.CreateDirectory(Path.Combine(workingDir, "Default", "Code Cache"));
+
+        File.WriteAllText(Path.Combine(workingDir, "Default", "Bookmarks"), "{\"bookmarks\": []}");
+        File.WriteAllText(Path.Combine(workingDir, "Default", "Cache", "cached_page.html"), "cached data");
+        File.WriteAllText(Path.Combine(workingDir, "Default", "Code Cache", "js_code.bin"), "compiled js");
+
+        VaultManager.LockVault(workingDir, profileId, password, vaultPath, _fastConfig, cleanWorkingDirectory: false);
+
+        VaultManager.UnlockVault(vaultPath, profileId, password, extractDir);
+
+        Assert.True(File.Exists(Path.Combine(extractDir, "Default", "Bookmarks")));
+        Assert.False(Directory.Exists(Path.Combine(extractDir, "Default", "Cache")));
+        Assert.False(Directory.Exists(Path.Combine(extractDir, "Default", "Code Cache")));
+    }
 }

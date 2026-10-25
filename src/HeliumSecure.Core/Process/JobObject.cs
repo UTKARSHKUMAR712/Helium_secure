@@ -26,7 +26,57 @@ public sealed class JobObject : IDisposable
         uint cbJobObjectInformationLength,
         out uint lpReturnLength);
 
+    [DllImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool SetInformationJobObject(
+        nint hJob,
+        int JobObjectInformationClass,
+        nint lpJobObjectInformation,
+        uint cbJobObjectInformationLength);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool TerminateJobObject(nint hJob, uint uExitCode);
+
     private const int JobObjectBasicProcessIdList = 3;
+    private const int JobObjectExtendedLimitInformation = 9;
+    private const uint JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE = 0x2000;
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct IO_COUNTERS
+    {
+        public ulong ReadOperationCount;
+        public ulong WriteOperationCount;
+        public ulong OtherOperationCount;
+        public ulong ReadTransferCount;
+        public ulong WriteTransferCount;
+        public ulong OtherTransferCount;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct JOBOBJECT_BASIC_LIMIT_INFORMATION
+    {
+        public long PerProcessUserTimeLimit;
+        public long PerJobUserTimeLimit;
+        public uint LimitFlags;
+        public nuint MinimumWorkingSetSize;
+        public nuint MaximumWorkingSetSize;
+        public uint ActiveProcessLimit;
+        public nuint Affinity;
+        public uint PriorityClass;
+        public uint SchedulingClass;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct JOBOBJECT_EXTENDED_LIMIT_INFORMATION
+    {
+        public JOBOBJECT_BASIC_LIMIT_INFORMATION BasicLimitInformation;
+        public IO_COUNTERS IoInfo;
+        public nuint ProcessMemoryLimit;
+        public nuint JobMemoryLimit;
+        public nuint PeakProcessMemoryLimit;
+        public nuint PeakJobMemoryLimit;
+    }
 
     private nint _handle;
     private bool _disposed;
@@ -37,6 +87,31 @@ public sealed class JobObject : IDisposable
         if (_handle == nint.Zero)
         {
             throw new Win32Exception(Marshal.GetLastWin32Error(), "Failed to create Job Object.");
+        }
+
+        SetKillOnClose();
+    }
+
+    private void SetKillOnClose()
+    {
+        var info = new JOBOBJECT_EXTENDED_LIMIT_INFORMATION
+        {
+            BasicLimitInformation = new JOBOBJECT_BASIC_LIMIT_INFORMATION
+            {
+                LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE
+            }
+        };
+
+        int length = Marshal.SizeOf<JOBOBJECT_EXTENDED_LIMIT_INFORMATION>();
+        nint pInfo = Marshal.AllocHGlobal(length);
+        try
+        {
+            Marshal.StructureToPtr(info, pInfo, false);
+            SetInformationJobObject(_handle, JobObjectExtendedLimitInformation, pInfo, (uint)length);
+        }
+        finally
+        {
+            Marshal.FreeHGlobal(pInfo);
         }
     }
 
@@ -79,12 +154,28 @@ public sealed class JobObject : IDisposable
         }
     }
 
+    public void Terminate(uint exitCode = 0)
+    {
+        if (_handle != nint.Zero)
+        {
+            try
+            {
+                TerminateJobObject(_handle, exitCode);
+            }
+            catch
+            {
+                // Best effort
+            }
+        }
+    }
+
     public void Dispose()
     {
         if (!_disposed)
         {
             if (_handle != nint.Zero)
             {
+                Terminate(0);
                 CloseHandle(_handle);
                 _handle = nint.Zero;
             }

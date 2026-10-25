@@ -8,6 +8,37 @@ namespace HeliumSecure.Core.Vault;
 
 public sealed class VaultManager
 {
+    private static readonly HashSet<string> ExcludedDirectoryNames = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "Cache",
+        "Code Cache",
+        "GPUCache",
+        "DawnCache",
+        "ShaderCache",
+        "GrShaderCache",
+        "Crashpad",
+        "BrowserMetrics",
+        "OptimizationGuidePredictionModels",
+        "GraphiteDawnCache",
+        "hyphen-data",
+        "File System",
+        "blob_storage"
+    };
+
+    private static readonly HashSet<string> ExcludedFileExtensions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ".tmp",
+        ".lock",
+        ".bak"
+    };
+
+    private static readonly HashSet<string> ExcludedFileNames = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "LOCK",
+        "LOG.old",
+        "chrome_shutdown_ms.txt"
+    };
+
     private static byte[] GetAad(Guid profileId) =>
         Encoding.UTF8.GetBytes($"HELIUMLOCK:{profileId:D}:v1");
 
@@ -82,7 +113,7 @@ public sealed class VaultManager
     }
 
     /// <summary>
-    /// Unlocks and extracts the vault into the target working directory.
+    /// Unlocks and extracts the vault into the target working directory using a password.
     /// Automatically attempts recovery from .bak if the primary vault file is corrupted or missing.
     /// </summary>
     public static void UnlockVault(string vaultPath, Guid profileId, string password, string destinationDirectory)
@@ -95,7 +126,7 @@ public sealed class VaultManager
 
         try
         {
-            UnlockVaultFile(vaultPath, profileId, password, destinationDirectory);
+            UnlockVaultFile(vaultPath, profileId, password, destinationDirectory, preDerivedKey: null);
         }
         catch (Exception ex) when (ex is CryptographicException or InvalidDataException or EndOfStreamException or FileNotFoundException)
         {
@@ -104,7 +135,7 @@ public sealed class VaultManager
             {
                 try
                 {
-                    UnlockVaultFile(bakPath, profileId, password, destinationDirectory);
+                    UnlockVaultFile(bakPath, profileId, password, destinationDirectory, preDerivedKey: null);
 
                     // Recovery succeeded from .bak! Restore .bak to primary
                     File.Copy(bakPath, vaultPath, overwrite: true);
@@ -122,7 +153,33 @@ public sealed class VaultManager
         }
     }
 
-    private static void UnlockVaultFile(string filePath, Guid profileId, string password, string destinationDirectory)
+    /// <summary>
+    /// Unlocks and extracts the vault into the target working directory using a pre-derived key.
+    /// Eliminates redundant Argon2id key derivation cycles for maximum launch performance.
+    /// Memory key buffer is wiped upon completion.
+    /// </summary>
+    public static void UnlockVaultWithKey(string vaultPath, Guid profileId, byte[] derivedKey, string destinationDirectory)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(vaultPath);
+        ArgumentNullException.ThrowIfNull(derivedKey);
+        ArgumentException.ThrowIfNullOrWhiteSpace(destinationDirectory);
+
+        try
+        {
+            UnlockVaultFile(vaultPath, profileId, password: string.Empty, destinationDirectory, preDerivedKey: derivedKey);
+        }
+        finally
+        {
+            AesGcmVaultCrypto.Wipe(derivedKey);
+        }
+    }
+
+    private static void UnlockVaultFile(
+        string filePath,
+        Guid profileId,
+        string password,
+        string destinationDirectory,
+        byte[]? preDerivedKey)
     {
         if (!File.Exists(filePath))
         {
@@ -143,17 +200,30 @@ public sealed class VaultManager
             }
         }
 
-        var config = new VaultCryptoConfig(
-            SaltSizeBytes: header.Salt.Length,
-            Iterations: header.Iterations,
-            MemorySizeKb: header.MemorySizeKb,
-            DegreeOfParallelism: header.DegreeOfParallelism,
-            KeySizeBytes: 32,
-            NonceSizeBytes: header.Nonce.Length,
-            TagSizeBytes: header.Tag.Length
-        );
+        byte[] key;
+        bool shouldWipeKey = false;
 
-        byte[] key = Argon2Helper.DeriveKey(password, header.Salt, config);
+        if (preDerivedKey != null && preDerivedKey.Length == 32)
+        {
+            key = preDerivedKey;
+            shouldWipeKey = false;
+        }
+        else
+        {
+            var config = new VaultCryptoConfig(
+                SaltSizeBytes: header.Salt.Length,
+                Iterations: header.Iterations,
+                MemorySizeKb: header.MemorySizeKb,
+                DegreeOfParallelism: header.DegreeOfParallelism,
+                KeySizeBytes: 32,
+                NonceSizeBytes: header.Nonce.Length,
+                TagSizeBytes: header.Tag.Length
+            );
+
+            key = Argon2Helper.DeriveKey(password, header.Salt, config);
+            shouldWipeKey = true;
+        }
+
         byte[]? plaintext = null;
 
         try
@@ -194,17 +264,23 @@ public sealed class VaultManager
         }
         finally
         {
-            AesGcmVaultCrypto.Wipe(key);
+            if (shouldWipeKey)
+            {
+                AesGcmVaultCrypto.Wipe(key);
+            }
             AesGcmVaultCrypto.Wipe(plaintext);
+            AesGcmVaultCrypto.Wipe(ciphertext);
         }
     }
 
     /// <summary>
-    /// Verifies the password against the vault (or .bak fallback) without extracting files to disk.
-    /// Memory buffers are wiped immediately upon verification.
+    /// Verifies the password against the vault and derives the encryption key in a single pass.
+    /// If verification succeeds, returns true and populates derivedKey.
+    /// If verification fails, returns false and outputs null.
     /// </summary>
-    public static bool VerifyPassword(string vaultPath, Guid profileId, string password)
+    public static bool VerifyAndDeriveKey(string vaultPath, Guid profileId, string password, out byte[]? derivedKey)
     {
+        derivedKey = null;
         ArgumentException.ThrowIfNullOrWhiteSpace(vaultPath);
         ArgumentException.ThrowIfNullOrWhiteSpace(password);
 
@@ -214,16 +290,15 @@ public sealed class VaultManager
         {
             try
             {
-                return VerifyPasswordAgainstFile(vaultPath, profileId, password);
+                return VerifyAndDeriveKeyFromFile(vaultPath, profileId, password, out derivedKey);
             }
             catch (CryptographicException)
             {
-                // If primary failed tag verification, check if .bak exists and succeeds (e.g. primary was corrupt)
                 if (File.Exists(bakPath))
                 {
                     try
                     {
-                        return VerifyPasswordAgainstFile(bakPath, profileId, password);
+                        return VerifyAndDeriveKeyFromFile(bakPath, profileId, password, out derivedKey);
                     }
                     catch
                     {
@@ -238,7 +313,7 @@ public sealed class VaultManager
                 {
                     try
                     {
-                        return VerifyPasswordAgainstFile(bakPath, profileId, password);
+                        return VerifyAndDeriveKeyFromFile(bakPath, profileId, password, out derivedKey);
                     }
                     catch
                     {
@@ -252,7 +327,7 @@ public sealed class VaultManager
         {
             try
             {
-                return VerifyPasswordAgainstFile(bakPath, profileId, password);
+                return VerifyAndDeriveKeyFromFile(bakPath, profileId, password, out derivedKey);
             }
             catch
             {
@@ -263,8 +338,9 @@ public sealed class VaultManager
         return false;
     }
 
-    private static bool VerifyPasswordAgainstFile(string filePath, Guid profileId, string password)
+    private static bool VerifyAndDeriveKeyFromFile(string filePath, Guid profileId, string password, out byte[]? derivedKey)
     {
+        derivedKey = null;
         if (!File.Exists(filePath)) return false;
 
         VaultFileHeader header;
@@ -303,14 +379,40 @@ public sealed class VaultManager
                 header.Tag,
                 GetAad(profileId)
             );
-            return plaintext != null;
+
+            if (plaintext != null)
+            {
+                derivedKey = key; // Keep key for subsequent unlock
+                return true;
+            }
+
+            AesGcmVaultCrypto.Wipe(key);
+            return false;
+        }
+        catch
+        {
+            AesGcmVaultCrypto.Wipe(key);
+            throw;
         }
         finally
         {
-            AesGcmVaultCrypto.Wipe(key);
             AesGcmVaultCrypto.Wipe(plaintext);
             AesGcmVaultCrypto.Wipe(ciphertext);
         }
+    }
+
+    /// <summary>
+    /// Verifies the password against the vault (or .bak fallback) without extracting files to disk.
+    /// Memory buffers are wiped immediately upon verification.
+    /// </summary>
+    public static bool VerifyPassword(string vaultPath, Guid profileId, string password)
+    {
+        bool isValid = VerifyAndDeriveKey(vaultPath, profileId, password, out var key);
+        if (key != null)
+        {
+            AesGcmVaultCrypto.Wipe(key);
+        }
+        return isValid;
     }
 
     /// <summary>
@@ -441,6 +543,7 @@ public sealed class VaultManager
 
     /// <summary>
     /// Archives and encrypts the working directory into the vault using atomic swap and safe recovery.
+    /// Excludes ephemeral browser caches to optimize encryption speed and minimize storage footprint.
     /// Cleans up the working directory afterwards.
     /// </summary>
     public static void LockVault(
@@ -550,9 +653,9 @@ public sealed class VaultManager
         var dirInfo = new DirectoryInfo(sourceDir);
         foreach (var file in dirInfo.GetFiles())
         {
-            // Skip lock files or temporary vault files inside working dir
-            if (file.Name.Equals(".lock", StringComparison.OrdinalIgnoreCase) ||
-                file.Name.EndsWith(".tmp", StringComparison.OrdinalIgnoreCase))
+            // Skip lock files, temporary files, or excluded volatile files
+            if (ExcludedFileNames.Contains(file.Name) ||
+                ExcludedFileExtensions.Contains(file.Extension))
             {
                 continue;
             }
@@ -561,11 +664,18 @@ public sealed class VaultManager
                 ? file.Name
                 : Path.Combine(relativeBase, file.Name).Replace('\\', '/');
 
-            zip.CreateEntryFromFile(file.FullName, entryName, CompressionLevel.Optimal);
+            // Use Fastest compression for rapid responsiveness since data is securely AES-GCM encrypted
+            zip.CreateEntryFromFile(file.FullName, entryName, CompressionLevel.Fastest);
         }
 
         foreach (var subDir in dirInfo.GetDirectories())
         {
+            // Skip ephemeral cache directories (Cache, Code Cache, GPUCache, etc.)
+            if (ExcludedDirectoryNames.Contains(subDir.Name))
+            {
+                continue;
+            }
+
             string newBase = string.IsNullOrEmpty(relativeBase)
                 ? subDir.Name
                 : Path.Combine(relativeBase, subDir.Name).Replace('\\', '/');
@@ -574,43 +684,66 @@ public sealed class VaultManager
         }
     }
 
+    /// <summary>
+    /// Safely cleans and deletes all files in the directory.
+    /// Overwrites sensitive user files before deletion to prevent recovery.
+    /// Retries if Windows file handles are briefly closing.
+    /// </summary>
     public static void CleanDirectorySafely(string directoryPath)
     {
         if (!Directory.Exists(directoryPath)) return;
 
-        try
+        for (int attempt = 0; attempt < 5; attempt++)
         {
-            var di = new DirectoryInfo(directoryPath);
-            foreach (var file in di.GetFiles("*", SearchOption.AllDirectories))
+            try
             {
-                try
+                var di = new DirectoryInfo(directoryPath);
+                foreach (var file in di.GetFiles("*", SearchOption.AllDirectories))
                 {
-                    // Overwrite file contents with zeros before deleting to prevent recovery
-                    using (var fs = new FileStream(file.FullName, FileMode.Open, FileAccess.Write, FileShare.None))
+                    try
                     {
-                        byte[] zeros = new byte[Math.Min(4096, (int)fs.Length)];
-                        long remaining = fs.Length;
-                        while (remaining > 0)
+                        // Overwrite sensitive user profile data files with zeros
+                        bool isCacheFile = ExcludedDirectoryNames.Any(ex =>
+                            file.FullName.Contains(Path.DirectorySeparatorChar + ex + Path.DirectorySeparatorChar) ||
+                            file.FullName.Contains(Path.AltDirectorySeparatorChar + ex + Path.AltDirectorySeparatorChar));
+
+                        if (!isCacheFile)
                         {
-                            int toWrite = (int)Math.Min(zeros.Length, remaining);
-                            fs.Write(zeros, 0, toWrite);
-                            remaining -= toWrite;
+                            using (var fs = new FileStream(file.FullName, FileMode.Open, FileAccess.Write, FileShare.None))
+                            {
+                                byte[] zeros = new byte[Math.Min(4096, (int)fs.Length)];
+                                long remaining = fs.Length;
+                                while (remaining > 0)
+                                {
+                                    int toWrite = (int)Math.Min(zeros.Length, remaining);
+                                    fs.Write(zeros, 0, toWrite);
+                                    remaining -= toWrite;
+                                }
+                                fs.Flush(flushToDisk: true);
+                            }
                         }
+                        file.Delete();
                     }
-                    file.Delete();
+                    catch
+                    {
+                        try { file.Delete(); } catch { }
+                    }
                 }
-                catch
+
+                Directory.Delete(directoryPath, recursive: true);
+                return;
+            }
+            catch (IOException)
+            {
+                if (attempt < 4)
                 {
-                    // If locked or fails, still try to delete
-                    try { file.Delete(); } catch { }
+                    Thread.Sleep(100);
                 }
             }
-
-            Directory.Delete(directoryPath, recursive: true);
-        }
-        catch
-        {
-            // Best effort cleanup
+            catch
+            {
+                break;
+            }
         }
     }
 }

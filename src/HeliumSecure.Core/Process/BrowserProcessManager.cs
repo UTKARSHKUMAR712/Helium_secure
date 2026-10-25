@@ -59,6 +59,7 @@ public sealed class BrowserProcessManager : IDisposable
 
     /// <summary>
     /// Launches Helium with the isolated user-data-dir and attaches it to the tracking Job Object.
+    /// Strict Chromium flags are passed to prevent background processes from persisting when the window is closed.
     /// </summary>
     public System.Diagnostics.Process Launch(string userDataDir, string? initialUrl = null, string? additionalArgs = null)
     {
@@ -82,12 +83,21 @@ public sealed class BrowserProcessManager : IDisposable
             CreateNoWindow = false
         };
 
-        // Strict argument sanitization and formatting
+        // Strict argument sanitization and formatting:
+        // Ensure background mode, background sync, and component updaters are disabled so the browser
+        // completely closes when the user clicks the 'X' (cross) button.
         var arguments = new List<string>
         {
             $"--user-data-dir=\"{userDataDir}\"",
             "--no-first-run",
-            "--no-default-browser-check"
+            "--no-default-browser-check",
+            "--disable-background-mode",
+            "--disable-background-networking",
+            "--disable-component-update",
+            "--disable-sync",
+            "--disable-breakpad",
+            "--disable-default-apps",
+            "--no-pings"
         };
 
         if (!string.IsNullOrWhiteSpace(additionalArgs))
@@ -108,7 +118,7 @@ public sealed class BrowserProcessManager : IDisposable
             throw new InvalidOperationException("Failed to start browser process.");
         }
 
-        // Assign to Job Object for tracking all child processes
+        // Assign to Job Object for tracking and enforcing termination of all child processes
         _jobObject.AssignProcess(_rootProcess);
 
         return _rootProcess;
@@ -116,8 +126,10 @@ public sealed class BrowserProcessManager : IDisposable
 
     /// <summary>
     /// Asynchronously monitors and waits until the browser process and all child processes exit.
+    /// Once the main window exits, gives a brief grace period to flush disk buffers, then
+    /// terminates all child background processes immediately to prevent lingering tasks.
     /// </summary>
-    public async Task WaitForExitAsync(int pollIntervalMs = 500, int maxGracePeriodMs = 15000, CancellationToken ct = default)
+    public async Task WaitForExitAsync(int pollIntervalMs = 250, int maxGracePeriodMs = 2000, CancellationToken ct = default)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
 
@@ -126,26 +138,59 @@ public sealed class BrowserProcessManager : IDisposable
             return;
         }
 
-        // First wait for the main window process to exit
-        await _rootProcess.WaitForExitAsync(ct).ConfigureAwait(false);
+        try
+        {
+            // First wait for the main window process to exit
+            await _rootProcess.WaitForExitAsync(ct).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            Terminate();
+            throw;
+        }
 
-        // Then wait for remaining renderers or background processes in the Job Object
+        // Once the main window exits, wait briefly for renderers/GPU to exit cleanly
         var stopwatch = Stopwatch.StartNew();
         while (_jobObject != null && _jobObject.GetActiveProcessCount() > 0)
         {
             if (stopwatch.ElapsedMilliseconds > maxGracePeriodMs)
             {
-                break; // Grace period expired
+                break; // Grace period expired - terminate lingering processes
             }
 
             await Task.Delay(pollIntervalMs, ct).ConfigureAwait(false);
         }
+
+        // Forcibly terminate any lingering background processes in the Job Object
+        _jobObject?.Terminate(0);
+    }
+
+    /// <summary>
+    /// Forcibly terminates the browser process and all child processes in the Job Object.
+    /// </summary>
+    public void Terminate()
+    {
+        try
+        {
+            _jobObject?.Terminate(0);
+        }
+        catch { }
+
+        try
+        {
+            if (_rootProcess != null && !_rootProcess.HasExited)
+            {
+                _rootProcess.Kill(entireProcessTree: true);
+            }
+        }
+        catch { }
     }
 
     public void Dispose()
     {
         if (!_disposed)
         {
+            Terminate();
             _rootProcess?.Dispose();
             _jobObject?.Dispose();
             _disposed = true;
