@@ -165,6 +165,7 @@ public partial class MainWindow : Window
     private UpdateCheckResult? _latestLauncherResult;
     private UpdateCheckResult? _latestBrowserResult;
     private string? _downloadedInstallerPath;
+    private PreUpdateSnapshotManager? _snapshotManager;
 
     private static readonly Geometry EyeOpenGeometry = Geometry.Parse("M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z");
     private static readonly Geometry EyeClosedGeometry = Geometry.Parse("M12 7c2.76 0 5 2.24 5 5 0 .65-.13 1.26-.36 1.83l2.92 2.92c1.51-1.26 2.7-2.89 3.44-4.75-1.73-4.39-6-7.5-11-7.5-1.4 0-2.74.25-3.98.7l2.16 2.16C10.74 7.13 11.35 7 12 7zM2 4.27l2.28 2.28.46.46C3.08 8.3 1.78 10.02 1 12c1.73 4.39 6 7.5 11 7.5 1.55 0 3.03-.3 4.38-.84l.42.42L19.73 22 21 20.73 3.27 3 2 4.27zM7.53 9.8l1.55 1.55c-.05.21-.08.43-.08.65 0 1.66 1.34 3 3 3 .22 0 .44-.03.65-.08l1.55 1.55c-.67.33-1.41.53-2.2.53-2.76 0-5-2.24-5-5 0-.79.2-1.53.53-2.2zm4.31-.78l3.15 3.15.02-.16c0-1.66-1.34-3-3-3l-.17.01z");
@@ -177,6 +178,8 @@ public partial class MainWindow : Window
 
         _profileManager = new ProfileManager();
         _guestManager = new GuestSessionManager();
+        _snapshotManager = new PreUpdateSnapshotManager(_profileManager.VaultsDirectory, _profileManager.ManifestPath);
+        _ = Task.Run(() => _snapshotManager.CleanupSnapshotsOnSystemRestart());
 
         _lockoutCountdownTimer = new System.Windows.Threading.DispatcherTimer
         {
@@ -202,7 +205,14 @@ public partial class MainWindow : Window
         _heliumExecutablePath = BrowserProcessManager.ResolveHeliumExecutable();
         if (!string.IsNullOrEmpty(_heliumExecutablePath) && File.Exists(_heliumExecutablePath))
         {
-            BrowserStatusPill.Text = "Helium 0.20.1.1 Linked";
+            string verStr = "0.20.1.1";
+            try
+            {
+                var fvi = System.Diagnostics.FileVersionInfo.GetVersionInfo(_heliumExecutablePath);
+                if (!string.IsNullOrEmpty(fvi.FileVersion)) verStr = fvi.FileVersion;
+            }
+            catch { }
+            BrowserStatusPill.Text = $"Helium {verStr} Linked";
             BrowserStatusPill.Foreground = new SolidColorBrush(Color.FromRgb(52, 211, 153)); // Emerald green
             BrowserStatusDot.Fill = new SolidColorBrush(Color.FromRgb(52, 211, 153));
         }
@@ -1022,6 +1032,9 @@ public partial class MainWindow : Window
             LauncherInstalledVersionText.Text = currentVer;
         }
 
+        var existingSnapshot = _snapshotManager?.GetLatestSnapshot();
+        if (existingSnapshot != null) ShowSnapshotBanner(existingSnapshot);
+
         // Pre-populate the installed browser version (best effort)
         try
         {
@@ -1031,6 +1044,15 @@ public partial class MainWindow : Window
             if (result.Status == UpdateCheckStatus.Error)
             {
                 BrowserUpdateStatus.Text = result.ErrorMessage ?? "Browser not detected.";
+            }
+            else if (result.Status == UpdateCheckStatus.UpdateAvailable)
+            {
+                BrowserUpdateStatus.Text = "Browser update available!";
+                BrowserUpdateStatus.Foreground = new SolidColorBrush(Color.FromRgb(251, 191, 36));
+                BrowserAvailableVersion.Text = $"Available version: {result.AvailableVersion}";
+                BrowserAvailableVersion.Visibility = Visibility.Visible;
+                DownloadBrowserButton.IsEnabled = !string.IsNullOrEmpty(result.DownloadUrl);
+                OpenBrowserDownloadButton.IsEnabled = true;
             }
         }
         catch
@@ -1100,6 +1122,17 @@ public partial class MainWindow : Window
         CheckLauncherUpdateButton.IsEnabled = false;
         LauncherDownloadProgress.Value = 0;
         LauncherDownloadProgress.Visibility = Visibility.Visible;
+        if (_snapshotManager != null)
+        {
+            LauncherUpdateStatus.Text = "Backing up encrypted vaults...";
+            var meta = await Task.Run(() =>
+                _snapshotManager.CreatePreUpdateSnapshot(
+                    sourceVersion: typeof(MainWindow).Assembly.GetName().Version?.ToString(3) ?? "1.0.4",
+                    targetVersion: _latestLauncherResult?.AvailableVersion,
+                    updateType: "LauncherPayloadUpdate"));
+            ShowSnapshotBanner(meta);
+        }
+
         LauncherUpdateStatus.Text = "Downloading...";
 
         try
@@ -1139,6 +1172,7 @@ public partial class MainWindow : Window
         CheckBrowserUpdateButton.IsEnabled = false;
         BrowserUpdateStatus.Text = "Checking...";
         BrowserAvailableVersion.Visibility = Visibility.Collapsed;
+        DownloadBrowserButton.IsEnabled = false;
         OpenBrowserDownloadButton.IsEnabled = false;
 
         try
@@ -1158,6 +1192,7 @@ public partial class MainWindow : Window
                     BrowserUpdateStatus.Foreground = new SolidColorBrush(Color.FromRgb(251, 191, 36));
                     BrowserAvailableVersion.Text = $"Available version: {_latestBrowserResult.AvailableVersion}";
                     BrowserAvailableVersion.Visibility = Visibility.Visible;
+                    DownloadBrowserButton.IsEnabled = !string.IsNullOrEmpty(_latestBrowserResult.DownloadUrl);
                     OpenBrowserDownloadButton.IsEnabled = true;
                     break;
 
@@ -1189,5 +1224,151 @@ public partial class MainWindow : Window
         {
             BrowserUpdateStatus.Text = $"Could not open browser: {ex.Message}";
         }
+    }
+
+    private async void OnDownloadBrowserClick(object sender, RoutedEventArgs e)
+    {
+        if (_latestBrowserResult?.DownloadUrl is not { Length: > 0 } downloadUrl)
+            return;
+
+        DownloadBrowserButton.IsEnabled = false;
+        CheckBrowserUpdateButton.IsEnabled = false;
+        OpenBrowserDownloadButton.IsEnabled = false;
+        // Take pre-update encrypted vault snapshot
+        if (_snapshotManager != null)
+        {
+            BrowserUpdateStatus.Text = "Backing up encrypted vaults...";
+            BrowserUpdateStatus.Foreground = new SolidColorBrush(Color.FromRgb(56, 189, 248));
+            var meta = await Task.Run(() =>
+                _snapshotManager.CreatePreUpdateSnapshot(
+                    sourceVersion: _latestBrowserResult?.InstalledVersion,
+                    targetVersion: _latestBrowserResult?.AvailableVersion,
+                    updateType: "BrowserPayloadUpdate"));
+            ShowSnapshotBanner(meta);
+        }
+
+        BrowserDownloadProgress.Value = 0;
+        BrowserDownloadProgress.Visibility = Visibility.Visible;
+        BrowserUpdateStatus.Text = $"Downloading Helium Browser {_latestBrowserResult.AvailableVersion} (0%)...";
+        BrowserUpdateStatus.Foreground = new SolidColorBrush(Color.FromRgb(56, 189, 248));
+
+        try
+        {
+            var runId = Guid.NewGuid().ToString("N")[..8];
+            var destDir = Path.Combine(Path.GetTempPath(), "HeliumBrowserUpdate", runId);
+            var fileName = Path.GetFileName(new Uri(downloadUrl).LocalPath);
+            if (string.IsNullOrEmpty(fileName)) fileName = "helium_installer.exe";
+            var destPath = Path.Combine(destDir, fileName);
+
+            var progress = new Progress<int>(pct =>
+                Dispatcher.Invoke(() =>
+                {
+                    BrowserDownloadProgress.Value = pct;
+                    BrowserUpdateStatus.Text = $"Downloading Helium Browser {_latestBrowserResult.AvailableVersion} ({pct}%)...";
+                }));
+
+            var downloadedInstallerPath = await _updateService.DownloadBrowserInstallerAsync(
+                downloadUrl, destPath, progress);
+
+            BrowserUpdateStatus.Text = "Download complete. Starting Helium browser installer…";
+            BrowserUpdateStatus.Foreground = new SolidColorBrush(Color.FromRgb(52, 211, 153));
+            await Task.Delay(500);
+
+            // Launch the browser installer
+            Process.Start(new ProcessStartInfo(downloadedInstallerPath) { UseShellExecute = true });
+
+            BrowserUpdateStatus.Text = "✓ Installer launched. Follow on-screen prompts or wait for installation to finish.";
+
+            // Background polling to automatically refresh version when setup completes
+            _ = Task.Run(async () =>
+            {
+                for (int i = 0; i < 20; i++)
+                {
+                    await Task.Delay(2000);
+                    var refreshed = await _updateService.CheckBrowserUpdateAsync();
+                    if (refreshed.Status == UpdateCheckStatus.UpToDate)
+                    {
+                        Dispatcher.Invoke(() =>
+                        {
+                            _latestBrowserResult = refreshed;
+                            BrowserInstalledVersion.Text = refreshed.InstalledVersion;
+                            BrowserUpdateStatus.Text = "✓ Helium Browser updated successfully!";
+                            BrowserAvailableVersion.Visibility = Visibility.Collapsed;
+                            DownloadBrowserButton.IsEnabled = false;
+                            BrowserDownloadProgress.Visibility = Visibility.Collapsed;
+
+                            if (BrowserStatusPill != null)
+                            {
+                                BrowserStatusPill.Text = $"Helium {refreshed.InstalledVersion} Linked";
+                                BrowserStatusPill.Foreground = new SolidColorBrush(Color.FromRgb(52, 211, 153));
+                                BrowserStatusDot.Fill = new SolidColorBrush(Color.FromRgb(52, 211, 153));
+                            }
+                        });
+                        break;
+                    }
+                }
+            });
+        }
+        catch (Exception ex)
+        {
+            BrowserUpdateStatus.Text = $"Download failed: {ex.Message}";
+            BrowserUpdateStatus.Foreground = new SolidColorBrush(Color.FromRgb(251, 113, 133));
+            DownloadBrowserButton.IsEnabled = true;
+            BrowserDownloadProgress.Visibility = Visibility.Collapsed;
+        }
+        finally
+        {
+            CheckBrowserUpdateButton.IsEnabled = true;
+            OpenBrowserDownloadButton.IsEnabled = true;
+        }
+    }
+
+    private void ShowSnapshotBanner(PreUpdateSnapshotMeta meta)
+    {
+        Dispatcher.Invoke(() =>
+        {
+            if (SnapshotBanner == null) return;
+            SnapshotBanner.Visibility = Visibility.Visible;
+            var sizeMB = Math.Round(meta.TotalSizeBytes / (1024.0 * 1024.0), 1);
+            if (SnapshotDetailsText != null)
+            {
+                SnapshotDetailsText.Text = $"Snapshot created: {meta.VaultFiles.Count} vault(s) backed up ({sizeMB} MB). Purges automatically on system restart.";
+            }
+        });
+    }
+
+    private void HideSnapshotBanner()
+    {
+        Dispatcher.Invoke(() =>
+        {
+            if (SnapshotBanner != null) SnapshotBanner.Visibility = Visibility.Collapsed;
+        });
+    }
+
+    private async void OnRollbackSnapshotClick(object sender, RoutedEventArgs e)
+    {
+        if (_snapshotManager == null) return;
+        RollbackSnapshotButton.IsEnabled = false;
+        BrowserUpdateStatus.Text = "Rolling back vault snapshot...";
+        BrowserUpdateStatus.Foreground = new SolidColorBrush(Color.FromRgb(56, 189, 248));
+        bool success = await Task.Run(() => _snapshotManager.RollbackLatestSnapshot());
+        BrowserUpdateStatus.Text = success
+            ? "✓ Vaults rolled back to pre-update state."
+            : "Rollback failed — no snapshot found.";
+        BrowserUpdateStatus.Foreground = success
+            ? new SolidColorBrush(Color.FromRgb(52, 211, 153))
+            : new SolidColorBrush(Color.FromRgb(251, 113, 133));
+        RollbackSnapshotButton.IsEnabled = true;
+        RefreshProfileList();
+    }
+
+    private async void OnDeleteSnapshotClick(object sender, RoutedEventArgs e)
+    {
+        if (_snapshotManager == null) return;
+        DeleteSnapshotButton.IsEnabled = false;
+        bool deleted = await Task.Run(() => _snapshotManager.DeleteSnapshot());
+        if (deleted) HideSnapshotBanner();
+        BrowserUpdateStatus.Text = deleted ? "✓ Vault backup deleted." : "No backup found.";
+        DeleteSnapshotButton.IsEnabled = true;
     }
 }

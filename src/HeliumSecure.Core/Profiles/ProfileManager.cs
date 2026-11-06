@@ -62,6 +62,8 @@ public sealed class ProfileManager
 
     public IClock Clock => _clock;
     public ProfileManifest Manifest { get; private set; }
+    public string VaultsDirectory => _vaultsDirectory;
+    public string ManifestPath => _manifestPath;
 
     public ProfileManager(string? customBaseDirectory = null, VaultCryptoConfig? cryptoConfig = null, IClock? clock = null)
     {

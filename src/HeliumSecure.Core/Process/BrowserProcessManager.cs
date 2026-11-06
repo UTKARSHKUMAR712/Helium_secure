@@ -37,23 +37,50 @@ public sealed class BrowserProcessManager : IDisposable
             return Path.GetFullPath(envPath);
         }
 
-        // 2. Relative to current launcher directory (for standalone portable/installer distribution)
+        // 2. Resolve candidates (bundled or installed) and select the highest version available
         string baseDir = AppContext.BaseDirectory;
         string bundledCandidate1 = Path.Combine(baseDir, "browser", "chrome.exe");
-        if (File.Exists(bundledCandidate1)) return bundledCandidate1;
-
         string bundledCandidate2 = Path.Combine(baseDir, "chrome.exe");
-        if (File.Exists(bundledCandidate2)) return bundledCandidate2;
 
         // 3. Upstream installed Helium in AppData
         string localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
         string installedPath = Path.Combine(localAppData, "imput", "Helium", "Application", "chrome.exe");
-        if (File.Exists(installedPath))
+
+        var candidates = new[] { bundledCandidate1, bundledCandidate2, installedPath }
+            .Where(File.Exists)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        if (candidates.Count == 0) return null;
+        if (candidates.Count == 1) return candidates[0];
+
+        // If multiple installations exist, choose the one with the highest FileVersion
+        string best = candidates[0];
+        Version bestVer = ParseFileVersion(best);
+
+        for (int i = 1; i < candidates.Count; i++)
         {
-            return installedPath;
+            var curVer = ParseFileVersion(candidates[i]);
+            if (curVer > bestVer)
+            {
+                best = candidates[i];
+                bestVer = curVer;
+            }
         }
 
-        return null;
+        return best;
+    }
+
+    private static Version ParseFileVersion(string path)
+    {
+        try
+        {
+            var fvi = System.Diagnostics.FileVersionInfo.GetVersionInfo(path);
+            if (System.Version.TryParse(fvi.FileVersion, out var v))
+                return v;
+        }
+        catch { }
+        return new Version(0, 0, 0, 0);
     }
 
     /// <summary>

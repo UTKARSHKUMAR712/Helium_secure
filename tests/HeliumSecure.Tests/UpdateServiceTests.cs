@@ -127,6 +127,31 @@ public sealed class UpdateServiceTests
             svc.DownloadLauncherInstallerAsync("http://localhost:1/no-such-file.exe", dest));
     }
 
+    // Test 5b ─ download browser with invalid URL → exception propagated
+    [Fact]
+    public async Task DownloadBrowserInstaller_WithInvalidUrl_ThrowsOrReturnsError()
+    {
+        var svc = new UpdateService();
+        var dest = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString(), "test.exe");
+
+        await Assert.ThrowsAnyAsync<Exception>(() =>
+            svc.DownloadBrowserInstallerAsync("http://localhost:1/no-such-file.exe", dest));
+    }
+
+    // Test 5c ─ check browser update with explicit missing path
+    [Fact]
+    public async Task CheckBrowserUpdate_WithMissingPath_ReturnsError()
+    {
+        var fake = new FakeUpdateApiClient();
+        var svc = new UpdateService(fake);
+        var missingPath = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString(), "chrome.exe");
+
+        var result = await svc.CheckBrowserUpdateAsync(missingPath);
+
+        Assert.Equal(UpdateCheckStatus.Error, result.Status);
+        Assert.Contains("not found", result.ErrorMessage, StringComparison.OrdinalIgnoreCase);
+    }
+
     // Test 6 ─ LaunchInstallerAndExit with missing file → FileNotFoundException
     [Fact]
     public void LaunchInstallerAndExit_WithMissingFile_ThrowsFileNotFoundException()

@@ -155,11 +155,12 @@ public sealed class UpdateService
     // Browser update check
     // -----------------------------------------------------------------------
 
-    public async Task<UpdateCheckResult> CheckBrowserUpdateAsync(CancellationToken ct = default)
+    public async Task<UpdateCheckResult> CheckBrowserUpdateAsync(string? customExePath = null, CancellationToken ct = default)
     {
         // Resolve installed browser version
         var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-        var chromeExe = Path.Combine(localAppData, "imput", "Helium", "Application", "chrome.exe");
+        var defaultPath = Path.Combine(localAppData, "imput", "Helium", "Application", "chrome.exe");
+        var chromeExe = customExePath ?? Process.BrowserProcessManager.ResolveHeliumExecutable() ?? defaultPath;
 
         string installedVersion;
         try
@@ -195,6 +196,9 @@ public sealed class UpdateService
             // Pick x64 full installer URL
             string? downloadUrl = release.Assets
                 .FirstOrDefault(a => a.Name.EndsWith("x64-installer.exe", StringComparison.OrdinalIgnoreCase))
+                ?.BrowserDownloadUrl
+                ?? release.Assets
+                .FirstOrDefault(a => a.Name.Contains("x64", StringComparison.OrdinalIgnoreCase) && a.Name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
                 ?.BrowserDownloadUrl;
 
             return new UpdateCheckResult(
@@ -219,6 +223,18 @@ public sealed class UpdateService
     }
 
     // -----------------------------------------------------------------------
+    /// <summary>
+    /// Downloads the browser installer from the given URL and validates integrity.
+    /// </summary>
+    public Task<string> DownloadBrowserInstallerAsync(
+        string downloadUrl,
+        string destPath,
+        IProgress<int>? progress = null,
+        CancellationToken ct = default)
+    {
+        return DownloadLauncherInstallerAsync(downloadUrl, destPath, progress, ct);
+    }
+
     // Download launcher installer
     // -----------------------------------------------------------------------
 
