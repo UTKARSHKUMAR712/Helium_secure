@@ -459,8 +459,41 @@ public sealed class UpdateService
                         try { Directory.Delete(dir, recursive: true); } catch { }
                     }
                 }
+
+                foreach (var mf in Directory.GetFiles(targetBrowserDir, "*.manifest", SearchOption.TopDirectoryOnly))
+                {
+                    var mfName = Path.GetFileNameWithoutExtension(mf);
+                    if (System.Version.TryParse(mfName, out _) && !string.Equals(mfName, newVer, StringComparison.OrdinalIgnoreCase))
+                    {
+                        try { File.Delete(mf); } catch { }
+                    }
+                }
             }
         }, ct);
+    }
+
+
+    /// <summary>
+    /// Purges all temporary download and staging folders created during prior updates to prevent disk clutter.
+    /// </summary>
+    public static void CleanupStaleUpdateTempDirectories()
+    {
+        try
+        {
+            var tempBase = Path.GetTempPath();
+            var browserUpdateDir = Path.Combine(tempBase, "HeliumBrowserUpdate");
+            var launcherUpdateDir = Path.Combine(tempBase, "HeliumSecureUpdate");
+
+            if (Directory.Exists(browserUpdateDir))
+            {
+                try { Directory.Delete(browserUpdateDir, recursive: true); } catch { }
+            }
+            if (Directory.Exists(launcherUpdateDir))
+            {
+                try { Directory.Delete(launcherUpdateDir, recursive: true); } catch { }
+            }
+        }
+        catch { }
     }
 
 }

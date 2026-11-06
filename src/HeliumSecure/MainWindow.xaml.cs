@@ -1035,6 +1035,9 @@ public partial class MainWindow : Window
         var existingSnapshot = _snapshotManager?.GetLatestSnapshot();
         if (existingSnapshot != null) ShowSnapshotBanner(existingSnapshot);
 
+        // Clean up any stale temporary update archives from previous sessions
+        _ = Task.Run(() => UpdateService.CleanupStaleUpdateTempDirectories());
+
         // Pre-populate the installed browser version (best effort)
         try
         {
@@ -1293,6 +1296,9 @@ public partial class MainWindow : Window
                     }));
 
                 await _updateService.ApplyBrowserZipUpdateAsync(downloadedInstallerPath, browserDir, extractProgress);
+
+                // Immediately purge temporary download archive to avoid wasting disk space
+                try { Directory.Delete(destDir, recursive: true); } catch { }
 
                 // Re-detect executable and refresh state
                 DetectHeliumExecutable();
