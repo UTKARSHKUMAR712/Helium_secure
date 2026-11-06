@@ -152,6 +152,50 @@ public sealed class UpdateServiceTests
         Assert.Contains("not found", result.ErrorMessage, StringComparison.OrdinalIgnoreCase);
     }
 
+    // Test 5d ─ ApplyBrowserZipUpdateAsync extracts files and cleans old versions
+    [Fact]
+    public async Task ApplyBrowserZipUpdate_ExtractsFilesAndCleansOldVersions()
+    {
+        var tempRoot = Path.Combine(Path.GetTempPath(), "HeliumTest_ZipUpdate_" + Guid.NewGuid().ToString("N"));
+        var zipPath = Path.Combine(tempRoot, "test_browser.zip");
+        var targetDir = Path.Combine(tempRoot, "browser");
+        var oldVerDir = Path.Combine(targetDir, "0.20.1.1");
+
+        try
+        {
+            Directory.CreateDirectory(oldVerDir);
+            File.WriteAllText(Path.Combine(oldVerDir, "old.dll"), "old");
+
+            // Create a test zip with prefix
+            Directory.CreateDirectory(tempRoot);
+            using (var zipStream = new FileStream(zipPath, FileMode.Create))
+            using (var archive = new System.IO.Compression.ZipArchive(zipStream, System.IO.Compression.ZipArchiveMode.Create))
+            {
+                var manifestEntry = archive.CreateEntry("helium_0.21.1.1_x64-windows/0.21.1.1.manifest");
+                using (var writer = new StreamWriter(manifestEntry.Open()))
+                {
+                    writer.Write("manifest");
+                }
+                var chromeEntry = archive.CreateEntry("helium_0.21.1.1_x64-windows/chrome.exe");
+                using (var writer = new StreamWriter(chromeEntry.Open()))
+                {
+                    writer.Write("chrome binary mock");
+                }
+            }
+
+            var svc = new UpdateService();
+            await svc.ApplyBrowserZipUpdateAsync(zipPath, targetDir);
+
+            Assert.True(File.Exists(Path.Combine(targetDir, "chrome.exe")));
+            Assert.True(File.Exists(Path.Combine(targetDir, "0.21.1.1.manifest")));
+            Assert.False(Directory.Exists(oldVerDir)); // Old 0.20.1.1 directory pruned
+        }
+        finally
+        {
+            try { Directory.Delete(tempRoot, recursive: true); } catch { }
+        }
+    }
+
     // Test 6 ─ LaunchInstallerAndExit with missing file → FileNotFoundException
     [Fact]
     public void LaunchInstallerAndExit_WithMissingFile_ThrowsFileNotFoundException()

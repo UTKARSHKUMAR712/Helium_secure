@@ -1,3 +1,4 @@
+using System.IO.Compression;
 using System.Diagnostics;
 using System.Net;
 using System.Net.Http;
@@ -193,12 +194,15 @@ public sealed class UpdateService
             var tagVersion = NormaliseVersion(release.TagName);
             var status = CompareVersions(installedVersion, tagVersion);
 
-            // Pick x64 full installer URL
+            // Pick x64 portable zip payload for direct in-place update of HeliumSecure's bundled browser
             string? downloadUrl = release.Assets
-                .FirstOrDefault(a => a.Name.EndsWith("x64-installer.exe", StringComparison.OrdinalIgnoreCase))
+                .FirstOrDefault(a => a.Name.EndsWith("x64-windows.zip", StringComparison.OrdinalIgnoreCase))
                 ?.BrowserDownloadUrl
                 ?? release.Assets
-                .FirstOrDefault(a => a.Name.Contains("x64", StringComparison.OrdinalIgnoreCase) && a.Name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
+                .FirstOrDefault(a => a.Name.Contains("x64", StringComparison.OrdinalIgnoreCase) && a.Name.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
+                ?.BrowserDownloadUrl
+                ?? release.Assets
+                .FirstOrDefault(a => a.Name.EndsWith("x64-installer.exe", StringComparison.OrdinalIgnoreCase))
                 ?.BrowserDownloadUrl;
 
             return new UpdateCheckResult(
@@ -364,4 +368,99 @@ public sealed class UpdateService
 
         return av > iv ? UpdateCheckStatus.UpdateAvailable : UpdateCheckStatus.UpToDate;
     }
+
+    /// <summary>
+    /// Applies a downloaded browser zip archive directly into the specified browser directory,
+    /// updating HeliumSecure's bundled browser in-place without running an external installer.
+    /// </summary>
+    public async Task ApplyBrowserZipUpdateAsync(
+        string zipPath,
+        string targetBrowserDir,
+        IProgress<int>? progress = null,
+        CancellationToken ct = default)
+    {
+        if (!File.Exists(zipPath))
+            throw new FileNotFoundException("Browser zip package not found.", zipPath);
+
+        Directory.CreateDirectory(targetBrowserDir);
+
+        // Terminate any running chrome.exe processes originating from the target browser directory
+        try
+        {
+            var processes = System.Diagnostics.Process.GetProcessesByName("chrome");
+            foreach (var p in processes)
+            {
+                try
+                {
+                    if (p.MainModule?.FileName?.StartsWith(targetBrowserDir, StringComparison.OrdinalIgnoreCase) == true)
+                    {
+                        p.Kill();
+                        p.WaitForExit(3000);
+                    }
+                }
+                catch { }
+            }
+        }
+        catch { }
+
+        await Task.Run(() =>
+        {
+            using var archive = ZipFile.OpenRead(zipPath);
+
+            // Determine if entries are inside a common prefix folder (e.g. helium_0.21.1.1_x64-windows/)
+            var chromeEntry = archive.Entries.FirstOrDefault(e => e.FullName.EndsWith("chrome.exe", StringComparison.OrdinalIgnoreCase));
+            string prefix = "";
+            if (chromeEntry != null && chromeEntry.FullName.Contains('/'))
+            {
+                prefix = chromeEntry.FullName.Substring(0, chromeEntry.FullName.LastIndexOf('/') + 1);
+            }
+
+            var fileEntries = archive.Entries.Where(e => !string.IsNullOrEmpty(e.Name)).ToList();
+            int total = fileEntries.Count;
+            int current = 0;
+
+            foreach (var entry in fileEntries)
+            {
+                ct.ThrowIfCancellationRequested();
+
+                string relPath = entry.FullName;
+                if (!string.IsNullOrEmpty(prefix) && relPath.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                {
+                    relPath = relPath.Substring(prefix.Length);
+                }
+
+                string destPath = Path.Combine(targetBrowserDir, relPath);
+                string? destDir = Path.GetDirectoryName(destPath);
+                if (!string.IsNullOrEmpty(destDir))
+                {
+                    Directory.CreateDirectory(destDir);
+                }
+
+                entry.ExtractToFile(destPath, overwrite: true);
+
+                current++;
+                if (progress != null && total > 0)
+                {
+                    progress.Report((int)(current * 100.0 / total));
+                }
+            }
+
+            // Clean up old version folders (e.g. 0.20.1.1) in targetBrowserDir that differ from newly extracted version
+            var newManifest = Directory.GetFiles(targetBrowserDir, "*.manifest", SearchOption.TopDirectoryOnly).FirstOrDefault();
+            string? newVer = newManifest != null ? Path.GetFileNameWithoutExtension(newManifest) : null;
+
+            if (!string.IsNullOrEmpty(newVer))
+            {
+                foreach (var dir in Directory.GetDirectories(targetBrowserDir))
+                {
+                    var dirName = Path.GetFileName(dir);
+                    if (System.Version.TryParse(dirName, out _) && !string.Equals(dirName, newVer, StringComparison.OrdinalIgnoreCase))
+                    {
+                        try { Directory.Delete(dir, recursive: true); } catch { }
+                    }
+                }
+            }
+        }, ct);
+    }
+
 }

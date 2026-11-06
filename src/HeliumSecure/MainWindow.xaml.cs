@@ -1270,44 +1270,59 @@ public partial class MainWindow : Window
             var downloadedInstallerPath = await _updateService.DownloadBrowserInstallerAsync(
                 downloadUrl, destPath, progress);
 
-            BrowserUpdateStatus.Text = "Download complete. Starting Helium browser installer…";
-            BrowserUpdateStatus.Foreground = new SolidColorBrush(Color.FromRgb(52, 211, 153));
-            await Task.Delay(500);
-
-            // Launch the browser installer
-            Process.Start(new ProcessStartInfo(downloadedInstallerPath) { UseShellExecute = true });
-
-            BrowserUpdateStatus.Text = "✓ Installer launched. Follow on-screen prompts or wait for installation to finish.";
-
-            // Background polling to automatically refresh version when setup completes
-            _ = Task.Run(async () =>
+            string browserDir;
+            if (!string.IsNullOrEmpty(_heliumExecutablePath) && File.Exists(_heliumExecutablePath))
             {
-                for (int i = 0; i < 20; i++)
-                {
-                    await Task.Delay(2000);
-                    var refreshed = await _updateService.CheckBrowserUpdateAsync();
-                    if (refreshed.Status == UpdateCheckStatus.UpToDate)
-                    {
-                        Dispatcher.Invoke(() =>
-                        {
-                            _latestBrowserResult = refreshed;
-                            BrowserInstalledVersion.Text = refreshed.InstalledVersion;
-                            BrowserUpdateStatus.Text = "✓ Helium Browser updated successfully!";
-                            BrowserAvailableVersion.Visibility = Visibility.Collapsed;
-                            DownloadBrowserButton.IsEnabled = false;
-                            BrowserDownloadProgress.Visibility = Visibility.Collapsed;
+                browserDir = Path.GetDirectoryName(_heliumExecutablePath)!;
+            }
+            else
+            {
+                browserDir = Path.Combine(AppContext.BaseDirectory, "browser");
+            }
 
-                            if (BrowserStatusPill != null)
-                            {
-                                BrowserStatusPill.Text = $"Helium {refreshed.InstalledVersion} Linked";
-                                BrowserStatusPill.Foreground = new SolidColorBrush(Color.FromRgb(52, 211, 153));
-                                BrowserStatusDot.Fill = new SolidColorBrush(Color.FromRgb(52, 211, 153));
-                            }
-                        });
-                        break;
-                    }
+            if (downloadedInstallerPath.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
+            {
+                BrowserUpdateStatus.Text = "Applying in-place browser update...";
+                BrowserUpdateStatus.Foreground = new SolidColorBrush(Color.FromRgb(56, 189, 248));
+
+                var extractProgress = new Progress<int>(pct =>
+                    Dispatcher.Invoke(() =>
+                    {
+                        BrowserDownloadProgress.Value = pct;
+                        BrowserUpdateStatus.Text = $"Updating Helium browser binaries ({pct}%)...";
+                    }));
+
+                await _updateService.ApplyBrowserZipUpdateAsync(downloadedInstallerPath, browserDir, extractProgress);
+
+                // Re-detect executable and refresh state
+                DetectHeliumExecutable();
+                var refreshed = await _updateService.CheckBrowserUpdateAsync();
+                _latestBrowserResult = refreshed;
+
+                BrowserInstalledVersion.Text = refreshed.InstalledVersion;
+                BrowserUpdateStatus.Text = $"✓ Helium Browser updated to {refreshed.InstalledVersion} successfully!";
+                BrowserUpdateStatus.Foreground = new SolidColorBrush(Color.FromRgb(52, 211, 153));
+                BrowserAvailableVersion.Visibility = Visibility.Collapsed;
+                DownloadBrowserButton.IsEnabled = false;
+                BrowserDownloadProgress.Visibility = Visibility.Collapsed;
+
+                if (BrowserStatusPill != null)
+                {
+                    BrowserStatusPill.Text = $"Helium {refreshed.InstalledVersion} Linked";
+                    BrowserStatusPill.Foreground = new SolidColorBrush(Color.FromRgb(52, 211, 153));
+                    BrowserStatusDot.Fill = new SolidColorBrush(Color.FromRgb(52, 211, 153));
                 }
-            });
+            }
+            else
+            {
+                // Fallback for executable installers
+                BrowserUpdateStatus.Text = "Download complete. Starting Helium browser installer…";
+                BrowserUpdateStatus.Foreground = new SolidColorBrush(Color.FromRgb(52, 211, 153));
+                await Task.Delay(500);
+
+                Process.Start(new ProcessStartInfo(downloadedInstallerPath) { UseShellExecute = true });
+                BrowserUpdateStatus.Text = "✓ Installer launched. Follow on-screen prompts or wait for installation to finish.";
+            }
         }
         catch (Exception ex)
         {

@@ -48,8 +48,12 @@ dotnet publish "$RepoRoot\src\HeliumSecure\HeliumSecure.csproj" `
 # Step 3: Bundle Helium Browser binaries
 Write-Host "`n[3/6] Bundling upstream Helium browser binaries..." -ForegroundColor Yellow
 $InstalledBrowserDir = "$env:LOCALAPPDATA\imput\Helium\Application"
+$HeliumSecureInstalledBrowser = "$env:LOCALAPPDATA\Programs\HeliumSecure\browser"
 if (-not (Test-Path "$StagingDir\browser\chrome.exe")) {
-    if (Test-Path $InstalledBrowserDir) {
+    if (Test-Path "$HeliumSecureInstalledBrowser\chrome.exe") {
+        Write-Host "Copying Helium browser files from $HeliumSecureInstalledBrowser..."
+        Copy-Item -Path "$HeliumSecureInstalledBrowser\*" -Destination "$StagingDir\browser" -Recurse -Force
+    } elseif (Test-Path $InstalledBrowserDir) {
         Write-Host "Copying Helium browser files from $InstalledBrowserDir..."
         Copy-Item -Path "$InstalledBrowserDir\*" -Destination "$StagingDir\browser" -Recurse -Force
     } else {
