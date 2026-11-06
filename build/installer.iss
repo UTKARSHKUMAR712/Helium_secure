@@ -4,7 +4,7 @@
 ; =========================================================================
 
 #define MyAppName "HeliumSecure"
-#define MyAppVersion "1.0.5"
+#define MyAppVersion "1.0.6"
 #define MyAppPublisher "The HeliumSecure Authors"
 #define MyAppURL "https://github.com/UTKARSHKUMAR712/Helium_secure"
 #define MyAppExeName "HeliumSecure.exe"
