@@ -37,16 +37,28 @@ public sealed class BrowserProcessManager : IDisposable
             return Path.GetFullPath(envPath);
         }
 
-        // 2. Resolve candidates (bundled or installed) and select the highest version available
+        // 2. Resolve candidates (bundled or installed across standard paths) and select the highest version available
         string baseDir = AppContext.BaseDirectory;
         string bundledCandidate1 = Path.Combine(baseDir, "browser", "chrome.exe");
         string bundledCandidate2 = Path.Combine(baseDir, "chrome.exe");
 
-        // 3. Upstream installed Helium in AppData
         string localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-        string installedPath = Path.Combine(localAppData, "imput", "Helium", "Application", "chrome.exe");
+        string heliumSecureInstalledPath = Path.Combine(localAppData, "Programs", "HeliumSecure", "browser", "chrome.exe");
+        string imputHeliumInstalledPath = Path.Combine(localAppData, "imput", "Helium", "Application", "chrome.exe");
 
-        var candidates = new[] { bundledCandidate1, bundledCandidate2, installedPath }
+        string programFiles = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
+        string programFilesX86 = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86);
+        string pfCandidate = Path.Combine(programFiles, "Helium", "Application", "chrome.exe");
+        string pfX86Candidate = Path.Combine(programFilesX86, "Helium", "Application", "chrome.exe");
+
+        var candidates = new[] {
+            bundledCandidate1,
+            bundledCandidate2,
+            heliumSecureInstalledPath,
+            imputHeliumInstalledPath,
+            pfCandidate,
+            pfX86Candidate
+        }
             .Where(File.Exists)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
@@ -71,13 +83,33 @@ public sealed class BrowserProcessManager : IDisposable
         return best;
     }
 
-    private static Version ParseFileVersion(string path)
+    public static Version ParseFileVersion(string path)
     {
         try
         {
             var fvi = System.Diagnostics.FileVersionInfo.GetVersionInfo(path);
-            if (System.Version.TryParse(fvi.FileVersion, out var v))
-                return v;
+            var verStr = fvi.FileVersion?.Trim();
+            if (!string.IsNullOrEmpty(verStr))
+            {
+                if (verStr.StartsWith("v", StringComparison.OrdinalIgnoreCase))
+                    verStr = verStr[1..];
+
+                if (System.Version.TryParse(verStr, out var v))
+                    return v;
+
+                var clean = new string(verStr.TakeWhile(c => char.IsDigit(c) || c == '.').ToArray());
+                if (System.Version.TryParse(clean, out var cv))
+                    return cv;
+            }
+
+            var prodStr = fvi.ProductVersion?.Trim();
+            if (!string.IsNullOrEmpty(prodStr))
+            {
+                if (prodStr.StartsWith("v", StringComparison.OrdinalIgnoreCase))
+                    prodStr = prodStr[1..];
+                if (System.Version.TryParse(prodStr, out var pv))
+                    return pv;
+            }
         }
         catch { }
         return new Version(0, 0, 0, 0);

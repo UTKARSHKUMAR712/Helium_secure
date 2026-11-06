@@ -158,20 +158,20 @@ public sealed class UpdateService
 
     public async Task<UpdateCheckResult> CheckBrowserUpdateAsync(string? customExePath = null, CancellationToken ct = default)
     {
-        // Resolve installed browser version
-        var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-        var defaultPath = Path.Combine(localAppData, "imput", "Helium", "Application", "chrome.exe");
-        var chromeExe = customExePath ?? Process.BrowserProcessManager.ResolveHeliumExecutable() ?? defaultPath;
+        // Resolve installed browser version dynamically
+        var chromeExe = customExePath ?? Process.BrowserProcessManager.ResolveHeliumExecutable();
 
         string installedVersion;
         try
         {
-            if (!File.Exists(chromeExe))
+            if (string.IsNullOrEmpty(chromeExe) || !File.Exists(chromeExe))
                 return new UpdateCheckResult(UpdateCheckStatus.Error, "Not installed", null, null, null, null,
-                    $"Helium browser executable not found at: {chromeExe}");
+                    "Helium browser executable not found. Please link or install Helium.");
 
             var fvi = System.Diagnostics.FileVersionInfo.GetVersionInfo(chromeExe);
-            installedVersion = fvi.FileVersion ?? "0.0.0.0";
+            installedVersion = !string.IsNullOrWhiteSpace(fvi.FileVersion)
+                ? fvi.FileVersion.Trim()
+                : (!string.IsNullOrWhiteSpace(fvi.ProductVersion) ? fvi.ProductVersion.Trim() : "0.0.0.0");
         }
         catch (Exception ex)
         {

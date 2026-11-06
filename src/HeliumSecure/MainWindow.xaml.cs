@@ -205,11 +205,14 @@ public partial class MainWindow : Window
         _heliumExecutablePath = BrowserProcessManager.ResolveHeliumExecutable();
         if (!string.IsNullOrEmpty(_heliumExecutablePath) && File.Exists(_heliumExecutablePath))
         {
-            string verStr = "0.20.1.1";
+            string verStr = "Browser";
             try
             {
                 var fvi = System.Diagnostics.FileVersionInfo.GetVersionInfo(_heliumExecutablePath);
-                if (!string.IsNullOrEmpty(fvi.FileVersion)) verStr = fvi.FileVersion;
+                if (!string.IsNullOrWhiteSpace(fvi.FileVersion))
+                    verStr = fvi.FileVersion.Trim();
+                else if (!string.IsNullOrWhiteSpace(fvi.ProductVersion))
+                    verStr = fvi.ProductVersion.Trim();
             }
             catch { }
             BrowserStatusPill.Text = $"Helium {verStr} Linked";
