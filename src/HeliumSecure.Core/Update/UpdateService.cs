@@ -445,10 +445,41 @@ public sealed class UpdateService
                 }
             }
 
-            // Clean up old version folders (e.g. 0.20.1.1) in targetBrowserDir that differ from newly extracted version
-            var newManifest = Directory.GetFiles(targetBrowserDir, "*.manifest", SearchOption.TopDirectoryOnly).FirstOrDefault();
-            string? newVer = newManifest != null ? Path.GetFileNameWithoutExtension(newManifest) : null;
+            // Resolve exact binary version from newly extracted chrome.exe (or highest extracted manifest)
+            string chromePath = Path.Combine(targetBrowserDir, "chrome.exe");
+            string? newVer = null;
+            if (File.Exists(chromePath))
+            {
+                try
+                {
+                    var fvi = System.Diagnostics.FileVersionInfo.GetVersionInfo(chromePath);
+                    newVer = fvi.FileVersion?.Trim();
+                    if (string.IsNullOrEmpty(newVer)) newVer = fvi.ProductVersion?.Trim();
+                    if (!string.IsNullOrEmpty(newVer) && newVer.StartsWith("v", StringComparison.OrdinalIgnoreCase))
+                        newVer = newVer[1..];
+                    if (!string.IsNullOrEmpty(newVer))
+                        newVer = new string(newVer.TakeWhile(c => char.IsDigit(c) || c == '.').ToArray());
+                }
+                catch { }
+            }
 
+            // Fallback to highest version manifest in target directory if FileVersionInfo was unavailable (e.g. mock test binaries)
+            if (string.IsNullOrEmpty(newVer))
+            {
+                newVer = Directory.GetFiles(targetBrowserDir, "*.manifest", SearchOption.TopDirectoryOnly)
+                    .Select(Path.GetFileNameWithoutExtension)
+                    .Where(n => !string.IsNullOrEmpty(n))
+                    .OrderByDescending(n => System.Version.TryParse(n, out var v) ? v : new System.Version(0, 0, 0, 0))
+                    .FirstOrDefault();
+            }
+
+            // Ensure valid Windows Side-by-Side (SxS) manifest matches extracted binary version
+            if (File.Exists(chromePath))
+            {
+                Process.BrowserProcessManager.EnsureValidSideBySideManifest(chromePath);
+            }
+
+            // Clean up old version folders (e.g. 0.20.1.1) in targetBrowserDir that differ from newly extracted version
             if (!string.IsNullOrEmpty(newVer))
             {
                 foreach (var dir in Directory.GetDirectories(targetBrowserDir))
@@ -457,15 +488,6 @@ public sealed class UpdateService
                     if (System.Version.TryParse(dirName, out _) && !string.Equals(dirName, newVer, StringComparison.OrdinalIgnoreCase))
                     {
                         try { Directory.Delete(dir, recursive: true); } catch { }
-                    }
-                }
-
-                foreach (var mf in Directory.GetFiles(targetBrowserDir, "*.manifest", SearchOption.TopDirectoryOnly))
-                {
-                    var mfName = Path.GetFileNameWithoutExtension(mf);
-                    if (System.Version.TryParse(mfName, out _) && !string.Equals(mfName, newVer, StringComparison.OrdinalIgnoreCase))
-                    {
-                        try { File.Delete(mf); } catch { }
                     }
                 }
             }

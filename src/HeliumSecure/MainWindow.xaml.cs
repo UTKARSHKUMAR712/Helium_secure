@@ -205,6 +205,9 @@ public partial class MainWindow : Window
         _heliumExecutablePath = BrowserProcessManager.ResolveHeliumExecutable();
         if (!string.IsNullOrEmpty(_heliumExecutablePath) && File.Exists(_heliumExecutablePath))
         {
+            // Auto-heal Side-by-Side manifest if missing or mismatched
+            BrowserProcessManager.EnsureValidSideBySideManifest(_heliumExecutablePath);
+
             string verStr = "Browser";
             try
             {

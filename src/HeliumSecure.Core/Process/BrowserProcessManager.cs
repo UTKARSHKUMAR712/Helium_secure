@@ -116,6 +116,58 @@ public sealed class BrowserProcessManager : IDisposable
     }
 
     /// <summary>
+    /// Ensures that the browser executable has a matching Windows Side-by-Side (SxS) manifest
+    /// corresponding to its exact file/product version. If missing or mismatched, generates the valid manifest
+    /// and removes legacy mismatched manifests to prevent SxS assembly load failures.
+    /// </summary>
+    public static void EnsureValidSideBySideManifest(string executablePath)
+    {
+        try
+        {
+            if (string.IsNullOrEmpty(executablePath) || !File.Exists(executablePath))
+                return;
+
+            var dir = Path.GetDirectoryName(executablePath);
+            if (string.IsNullOrEmpty(dir) || !Directory.Exists(dir))
+                return;
+
+            var fvi = System.Diagnostics.FileVersionInfo.GetVersionInfo(executablePath);
+            var verStr = fvi.FileVersion?.Trim();
+            if (string.IsNullOrEmpty(verStr))
+                verStr = fvi.ProductVersion?.Trim();
+
+            if (string.IsNullOrEmpty(verStr))
+                return;
+
+            if (verStr.StartsWith("v", StringComparison.OrdinalIgnoreCase))
+                verStr = verStr[1..];
+
+            var cleanVer = new string(verStr.TakeWhile(c => char.IsDigit(c) || c == '.').ToArray());
+            if (string.IsNullOrEmpty(cleanVer))
+                cleanVer = verStr;
+
+            var targetManifest = Path.Combine(dir, $"{cleanVer}.manifest");
+
+            if (!File.Exists(targetManifest) || new FileInfo(targetManifest).Length == 0)
+            {
+                var content = $"<assembly\n  xmlns='urn:schemas-microsoft-com:asm.v1' manifestVersion='1.0'>\n  <assemblyIdentity\n      name='{cleanVer}'\n      version='{cleanVer}'\n      type='win32'/>\n  <file name='chrome_elf.dll'/>\n</assembly>";
+                File.WriteAllText(targetManifest, content, System.Text.Encoding.UTF8);
+            }
+
+            // Remove any obsolete .manifest files in the same directory that do not match the binary version
+            foreach (var mf in Directory.GetFiles(dir, "*.manifest", SearchOption.TopDirectoryOnly))
+            {
+                var fileName = Path.GetFileName(mf);
+                if (!string.Equals(fileName, $"{cleanVer}.manifest", StringComparison.OrdinalIgnoreCase))
+                {
+                    try { File.Delete(mf); } catch { }
+                }
+            }
+        }
+        catch { }
+    }
+
+    /// <summary>
     /// Launches Helium with the isolated user-data-dir and attaches it to the tracking Job Object.
     /// Helium browser runs with independent lifecycle and will not be killed if the launcher closes.
     /// </summary>
@@ -131,12 +183,16 @@ public sealed class BrowserProcessManager : IDisposable
         ArgumentException.ThrowIfNullOrWhiteSpace(userDataDir);
         Directory.CreateDirectory(userDataDir);
 
+        // Ensure Windows Side-by-Side (SxS) manifest matches executable before starting
+        EnsureValidSideBySideManifest(ExecutablePath);
+
         _jobObject?.Dispose();
         _jobObject = new JobObject();
 
         var startInfo = new ProcessStartInfo
         {
             FileName = ExecutablePath,
+            WorkingDirectory = Path.GetDirectoryName(ExecutablePath) ?? "",
             UseShellExecute = false,
             CreateNoWindow = false
         };

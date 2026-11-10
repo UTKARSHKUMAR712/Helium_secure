@@ -75,4 +75,23 @@ public class ProcessManagerTests
         Assert.False(process.HasExited);
         process.Kill();
     }
+
+    [Fact]
+    public void EnsureValidSideBySideManifest_WithInstalledHelium_HealsManifest()
+    {
+        string? resolved = BrowserProcessManager.ResolveHeliumExecutable();
+        if (resolved != null && File.Exists(resolved))
+        {
+            BrowserProcessManager.EnsureValidSideBySideManifest(resolved);
+            string dir = Path.GetDirectoryName(resolved)!;
+            var manifests = Directory.GetFiles(dir, "*.manifest");
+            Assert.NotEmpty(manifests);
+            foreach (var mf in manifests)
+            {
+                string text = File.ReadAllText(mf);
+                Assert.Contains("urn:schemas-microsoft-com:asm.v1", text);
+                Assert.Contains("chrome_elf.dll", text);
+            }
+        }
+    }
 }
